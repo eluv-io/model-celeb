@@ -1,0 +1,9 @@
+device: cuda
+
+model_path: models
+runtime:
+  default:
+    fps: 4
+    ipt_rgb: true
+    allow_single_frame: false
+    thres: 0.55
