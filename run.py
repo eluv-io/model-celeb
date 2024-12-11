@@ -21,7 +21,7 @@ class RuntimeConfig(Data):
     content_id: Optional[str]=None
 
     class Schema(Schema):
-        freq = fields.Int(required=True)
+        fps = fields.Int(required=True)
         thres = fields.Float(required=True)
         ipt_rgb = fields.Bool(required=True)
         allow_single_frame = fields.Bool(required=True)
