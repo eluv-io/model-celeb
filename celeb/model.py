@@ -255,7 +255,7 @@ class CelebRecognition(FrameModel):
             res = []
         else:
             res = res[0]
-        return [FrameTag(text=text, confidence=round(conf, 4), box = (round(box[0], 4), round(box[1], 4), round(box[2], 4), round(box[3], 4))) for text, conf, box, _, _ in res]
+        return [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
     
 def clustering(simi_matrix, thre):
     cluster = []
@@ -269,7 +269,6 @@ def clustering(simi_matrix, thre):
     G.add_edges_from(cluster)
     new_cluster = list(nx.connected_components(G))
     return new_cluster
-
 
 def km(x, n_clusters):
     kmeans = KMeans(n_clusters=n_clusters, n_jobs=-1, random_state=22)
