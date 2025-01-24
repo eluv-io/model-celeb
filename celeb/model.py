@@ -2,7 +2,7 @@ import os
 import time
 import json
 from collections import defaultdict
-from typing import List
+from typing import List, Optional, Union
 
 import networkx as nx
 from easydict import EasyDict as edict
@@ -13,14 +13,32 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from facenet_pytorch import MTCNN
+from dataclasses import dataclass, asdict
+from marshmallow import Schema, fields
 
 from . import face_model
 from common_ml.tags import FrameTag
 from common_ml.model import FrameModel
+from common_ml.types import Data
+
+@dataclass
+class RuntimeConfig(Data):
+    fps: int
+    thres: float
+    ipt_rgb: bool
+    allow_single_frame: bool
+    content_id: Optional[str]=None
+
+    @staticmethod
+    def from_dict(data: dict) -> 'RuntimeConfig':
+        return RuntimeConfig(**data)
 
 class CelebRecognition(FrameModel):
-    def __init__(self, model_input_path: str, thres: float):
-        self.thres = thres
+    def __init__(self, model_input_path: str, config: Union[dict, RuntimeConfig]) -> None:
+        if isinstance(config, dict):
+            self.config = RuntimeConfig.from_dict(config)
+        else:
+            self.config = config
         self.model_input_path = model_input_path
         self.args = self._add_params()
         # self.detector = cv2.dnn.readNetFromCaffe(
@@ -38,8 +56,7 @@ class CelebRecognition(FrameModel):
             self.cast_check = json.load(f)
             self.cast_check = {
                 k: set(v) if v else None for k, v in self.cast_check.items()}
-        self.content_id = None
-
+            
     def _add_params(self):
         io_path = os.path.join(self.model_input_path, 'celeb_detection')
         params = edict({
@@ -64,6 +81,12 @@ class CelebRecognition(FrameModel):
             'use_cuda': False
         })
         return params
+    
+    def set_config(self, config: dict) -> None:
+        self.config = RuntimeConfig.from_dict(config)
+
+    def get_config(self) -> dict:
+        return asdict(self.config)
 
     def detect_batch(self, frames):
         """Args: frames
@@ -249,8 +272,8 @@ class CelebRecognition(FrameModel):
         self.content_id = qid
     
     def tag(self, img: np.ndarray) -> List[FrameTag]:
-        content_id = self.content_id
-        res = self._tag_frames([img], self.thres, content_id=content_id)
+        content_id = self.config.content_id
+        res = self._tag_frames([img], self.config.thres, content_id=content_id)
         if len(res[0]) == 0:
             res = []
         else:
