@@ -20,6 +20,7 @@ from . import face_model
 from common_ml.tags import FrameTag
 from common_ml.model import FrameModel
 from common_ml.types import Data
+from config import config
 
 @dataclass
 class RuntimeConfig(Data):
@@ -27,6 +28,7 @@ class RuntimeConfig(Data):
     thres: float
     ipt_rgb: bool
     allow_single_frame: bool
+    ground_truth: str
     content_id: Optional[str]=None
 
     @staticmethod
@@ -34,11 +36,11 @@ class RuntimeConfig(Data):
         return RuntimeConfig(**data)
 
 class CelebRecognition(FrameModel):
-    def __init__(self, model_input_path: str, config: Union[dict, RuntimeConfig]) -> None:
+    def __init__(self, model_input_path: str, runtime_config: Union[dict, RuntimeConfig]) -> None:
         if isinstance(config, dict):
-            self.config = RuntimeConfig.from_dict(config)
+            self.config = RuntimeConfig.from_dict(runtime_config)
         else:
-            self.config = config
+            self.config = runtime_config
         self.model_input_path = model_input_path
         self.args = self._add_params()
         # self.detector = cv2.dnn.readNetFromCaffe(
@@ -59,6 +61,7 @@ class CelebRecognition(FrameModel):
             
     def _add_params(self):
         io_path = os.path.join(self.model_input_path, 'celeb_detection')
+        gt_path = os.path.join(config["storage"]["gt_path"], self.config.ground_truth)
         params = edict({
 
             'image_size': '112,112',
@@ -70,11 +73,11 @@ class CelebRecognition(FrameModel):
             'flip_celeb': 0,  # 'whether do lr flip aug'
             'threshold': 1.24,  # 'ver dist threshold'
             # 'image_features/feats_with_ibc.npy'
-            'im_pool_feats': os.path.join(io_path, 'image_features/feats_with_ibc.npy'),
+            'im_pool_feats': os.path.join(gt_path, 'feats.npy'),
             # 'image_features/gt_with_ibc.npy'
-            'gt': os.path.join(io_path, 'image_features/gt_with_ibc.npy'),
+            'gt': os.path.join(gt_path, 'gt.npy'),
             # 'id to name map'
-            'id2name': os.path.join(io_path, 'image_features/id2name_with_ibc.json'),
+            'id2name': os.path.join(gt_path, 'id2name.json'),
             'cast_check': os.path.join(io_path, 'ca_lookup.json'),
             'res10ssd_prototxt_path': os.path.join(io_path, 'face_detection_ssd/deploy.prototxt'),
             'res10ssd_model_path': os.path.join(io_path, 'face_detection_ssd/res10_300x300_ssd_iter_140000.caffemodel'),

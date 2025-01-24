@@ -1,6 +1,8 @@
 device: cuda
 
 model_path: models
+storage:
+  gt_path: image_features
 runtime:
   default:
     fps: 4
@@ -8,3 +10,4 @@ runtime:
     allow_single_frame: false
     thres: 0.55
     content_id: null
+    ground_truth: IBC
