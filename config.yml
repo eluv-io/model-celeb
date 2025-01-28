@@ -1,8 +1,11 @@
 device: cuda
 
-model_path: models
 storage:
-  gt_path: image_features
+  model_path: /eluvio/ml/models/celeb
+  gt_path: /eluvio/ml/models/celeb/image_features
+container:
+  model_path: models 
+  gt_path: models/image_features
 runtime:
   default:
     fps: 4

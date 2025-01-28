@@ -7,4 +7,7 @@ if ! ssh-add -l ; then
     exit 1
 fi
 
+SCRIPT_PATH="$(dirname "$(realpath "$0")")"
+MODEL_PATH=$(yq -r .storage.model_path $SCRIPT_PATH/config.yml)
+cp -r $MODEL_PATH $SCRIPT_PATH/models
 podman build --format docker -t celeb . --network host --build-arg SSH_AUTH_SOCK=$SSH_AUTH_SOCK --volume "${SSH_AUTH_SOCK}:${SSH_AUTH_SOCK}"

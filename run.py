@@ -19,7 +19,7 @@ def run(file_paths: List[str], runtime_config: str=None):
         cfg = json.loads(runtime_config)
         cfg = nested_update(config["runtime"]["default"], cfg)
     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tags')
-    model = CelebRecognition(config["model_path"], runtime_config=cfg)
+    model = CelebRecognition(config["container"]["model_path"], runtime_config=cfg)
     default_tag(model, file_paths, out_path)
         
 if __name__ == '__main__':

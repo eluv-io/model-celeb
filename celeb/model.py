@@ -60,8 +60,8 @@ class CelebRecognition(FrameModel):
                 k: set(v) if v else None for k, v in self.cast_check.items()}
             
     def _add_params(self):
-        io_path = os.path.join(self.model_input_path, 'celeb_detection')
-        gt_path = os.path.join(config["storage"]["gt_path"], self.config.ground_truth)
+        io_path = self.model_input_path
+        gt_path = os.path.join(config["container"]["gt_path"], self.config.ground_truth)
         params = edict({
 
             'image_size': '112,112',
