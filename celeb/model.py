@@ -30,6 +30,7 @@ class RuntimeConfig(Data):
     allow_single_frame: bool
     ground_truth: str
     content_id: Optional[str]=None
+    restrict_list: Optional[List[str]]=None
 
     @staticmethod
     def from_dict(data: dict) -> 'RuntimeConfig':
@@ -42,6 +43,7 @@ class CelebRecognition(FrameModel):
         else:
             self.config = runtime_config
         self.model_input_path = model_input_path
+        self.pool_path = os.path.join(config["container"]["gt_path"], self.config.ground_truth)
         self.args = self._add_params()
         # self.detector = cv2.dnn.readNetFromCaffe(
         #    self.args.res10ssd_prototxt_path, self.args.res10ssd_model_path)
@@ -49,6 +51,7 @@ class CelebRecognition(FrameModel):
         logger.info(
             f"MTCNN parameters stored on GPU: {next(self.detector.parameters()).is_cuda}")
         self.model = face_model.FaceModel(self.args)
+        
         im_pool_feats = np.load(self.args.im_pool_feats)
         self.im_pool_feats = im_pool_feats.astype(np.float32)
         self.gt = np.load(self.args.gt)
@@ -61,7 +64,7 @@ class CelebRecognition(FrameModel):
             
     def _add_params(self):
         io_path = self.model_input_path
-        gt_path = os.path.join(config["container"]["gt_path"], self.config.ground_truth)
+        gt_path = self.pool_path
         params = edict({
 
             'image_size': '112,112',
@@ -165,11 +168,16 @@ class CelebRecognition(FrameModel):
             return cv2.resize(image, (w_new, h_new))
         return
             
-    def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None):
+    def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
         # get cast pool
         cast_pool = None
         if content_id:
             cast_pool = self.cast_check.get(content_id, None)
+        elif restrict_list:
+            cast_pool = restrict_list
+        elif os.path.exists(os.path.join(self.pool_path, 'restrict.txt')):
+            with open(os.path.join(self.pool_path, 'restrict.txt'), 'r') as f:
+                cast_pool = [celeb.strip() for celeb in f.readlines()]
         logger.info(f"Main cast pool: {cast_pool}")
         # detect faces
         for i, f in enumerate(frames):
@@ -275,8 +283,11 @@ class CelebRecognition(FrameModel):
         self.content_id = qid
     
     def tag(self, img: np.ndarray) -> List[FrameTag]:
+        # convert from rgb to bgr
+        img = img[:, :, ::-1]
         content_id = self.config.content_id
-        res = self._tag_frames([img], self.config.thres, content_id=content_id)
+        restrict_list = self.config.restrict_list
+        res = self._tag_frames([img], self.config.thres, content_id=content_id, restrict_list=restrict_list)
         if len(res[0]) == 0:
             res = []
         else:

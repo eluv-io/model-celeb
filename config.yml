@@ -13,4 +13,5 @@ runtime:
     allow_single_frame: false
     thres: 0.55
     content_id: null
+    restrict_list: null
     ground_truth: IBC
