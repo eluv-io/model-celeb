@@ -20,6 +20,7 @@ from . import face_model
 from common_ml.tags import FrameTag
 from common_ml.model import FrameModel
 from common_ml.types import Data
+from config import config
 
 @dataclass
 class RuntimeConfig(Data):
@@ -27,19 +28,22 @@ class RuntimeConfig(Data):
     thres: float
     ipt_rgb: bool
     allow_single_frame: bool
+    ground_truth: str
     content_id: Optional[str]=None
+    restrict_list: Optional[List[str]]=None
 
     @staticmethod
     def from_dict(data: dict) -> 'RuntimeConfig':
         return RuntimeConfig(**data)
 
 class CelebRecognition(FrameModel):
-    def __init__(self, model_input_path: str, config: Union[dict, RuntimeConfig]) -> None:
+    def __init__(self, model_input_path: str, runtime_config: Union[dict, RuntimeConfig]) -> None:
         if isinstance(config, dict):
-            self.config = RuntimeConfig.from_dict(config)
+            self.config = RuntimeConfig.from_dict(runtime_config)
         else:
-            self.config = config
+            self.config = runtime_config
         self.model_input_path = model_input_path
+        self.pool_path = os.path.join(config["container"]["gt_path"], self.config.ground_truth)
         self.args = self._add_params()
         # self.detector = cv2.dnn.readNetFromCaffe(
         #    self.args.res10ssd_prototxt_path, self.args.res10ssd_model_path)
@@ -47,6 +51,7 @@ class CelebRecognition(FrameModel):
         logger.info(
             f"MTCNN parameters stored on GPU: {next(self.detector.parameters()).is_cuda}")
         self.model = face_model.FaceModel(self.args)
+        
         im_pool_feats = np.load(self.args.im_pool_feats)
         self.im_pool_feats = im_pool_feats.astype(np.float32)
         self.gt = np.load(self.args.gt)
@@ -58,7 +63,8 @@ class CelebRecognition(FrameModel):
                 k: set(v) if v else None for k, v in self.cast_check.items()}
             
     def _add_params(self):
-        io_path = os.path.join(self.model_input_path, 'celeb_detection')
+        io_path = self.model_input_path
+        gt_path = self.pool_path
         params = edict({
 
             'image_size': '112,112',
@@ -70,11 +76,11 @@ class CelebRecognition(FrameModel):
             'flip_celeb': 0,  # 'whether do lr flip aug'
             'threshold': 1.24,  # 'ver dist threshold'
             # 'image_features/feats_with_ibc.npy'
-            'im_pool_feats': os.path.join(io_path, 'image_features/feats_with_ibc.npy'),
+            'im_pool_feats': os.path.join(gt_path, 'feats.npy'),
             # 'image_features/gt_with_ibc.npy'
-            'gt': os.path.join(io_path, 'image_features/gt_with_ibc.npy'),
+            'gt': os.path.join(gt_path, 'gt.npy'),
             # 'id to name map'
-            'id2name': os.path.join(io_path, 'image_features/id2name_with_ibc.json'),
+            'id2name': os.path.join(gt_path, 'id2name.json'),
             'cast_check': os.path.join(io_path, 'ca_lookup.json'),
             'res10ssd_prototxt_path': os.path.join(io_path, 'face_detection_ssd/deploy.prototxt'),
             'res10ssd_model_path': os.path.join(io_path, 'face_detection_ssd/res10_300x300_ssd_iter_140000.caffemodel'),
@@ -162,11 +168,16 @@ class CelebRecognition(FrameModel):
             return cv2.resize(image, (w_new, h_new))
         return
             
-    def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None):
+    def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
         # get cast pool
         cast_pool = None
         if content_id:
             cast_pool = self.cast_check.get(content_id, None)
+        elif restrict_list:
+            cast_pool = restrict_list
+        elif os.path.exists(os.path.join(self.pool_path, 'restrict.txt')):
+            with open(os.path.join(self.pool_path, 'restrict.txt'), 'r') as f:
+                cast_pool = [celeb.strip() for celeb in f.readlines()]
         logger.info(f"Main cast pool: {cast_pool}")
         # detect faces
         for i, f in enumerate(frames):
@@ -196,10 +207,6 @@ class CelebRecognition(FrameModel):
         # create a intermediate result list to store all original tags
         res_inter = defaultdict(list)
         res_inter_tmp = defaultdict(list)
-
-        # reduce threshold if cast pool's available
-        if cast_pool is not None:
-            threshold_simi = 0.4
 
         for idx, (score, topk, bbox, ind) in enumerate(zip(scores, top_idx, bb_lst, index_lst)):
             if self.gt[topk] in self.id2name:
@@ -272,8 +279,11 @@ class CelebRecognition(FrameModel):
         self.content_id = qid
     
     def tag(self, img: np.ndarray) -> List[FrameTag]:
+        # convert from rgb to bgr
+        img = img[:, :, ::-1]
         content_id = self.config.content_id
-        res = self._tag_frames([img], self.config.thres, content_id=content_id)
+        restrict_list = self.config.restrict_list
+        res = self._tag_frames([img], self.config.thres, content_id=content_id, restrict_list=restrict_list)
         if len(res[0]) == 0:
             res = []
         else:
