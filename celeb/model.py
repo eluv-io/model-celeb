@@ -208,10 +208,6 @@ class CelebRecognition(FrameModel):
         res_inter = defaultdict(list)
         res_inter_tmp = defaultdict(list)
 
-        # reduce threshold if cast pool's available
-        if cast_pool is not None:
-            threshold_simi = 0.4
-
         for idx, (score, topk, bbox, ind) in enumerate(zip(scores, top_idx, bb_lst, index_lst)):
             if self.gt[topk] in self.id2name:
                 res_inter_tmp[idx] = (self.id2name[self.gt[topk]], score)
