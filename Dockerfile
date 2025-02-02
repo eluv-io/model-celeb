@@ -13,20 +13,25 @@ RUN \
     conda install -y cudatoolkit=10.1 cudnn=7 nccl && \
     conda install -y -c conda-forge ffmpeg-python
 
-COPY celeb ./celeb
-COPY config.yml run.py setup.py config.py .
-
-COPY models ./models
-
 # Create the SSH directory and set correct permissions
 RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 
 # Add GitHub to known_hosts to bypass host verification
 RUN ssh-keyscan -t rsa github.com >> /root/.ssh/known_hosts
 
+COPY setup.py .
+RUN mkdir -p celeb
+
 ARG SSH_AUTH_SOCK
 ENV SSH_AUTH_SOCK ${SSH_AUTH_SOCK}
 
 RUN /opt/conda/envs/celeb/bin/pip install .
+
+COPY models ./models
+
+COPY celeb ./celeb
+COPY config.yml run.py config.py .
+
+
 
 ENTRYPOINT ["/opt/conda/envs/celeb/bin/python", "run.py"]
