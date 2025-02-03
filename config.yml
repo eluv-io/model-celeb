@@ -11,6 +11,7 @@ runtime:
     fps: 4
     ipt_rgb: true
     allow_single_frame: false
+    candidates: 5
     thres: 0.55
     content_id: null
     restrict_list: null
