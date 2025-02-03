@@ -184,7 +184,7 @@ class CelebRecognition(FrameModel):
         res = []
         for sample, face in enumerate(best_idx):
             candidates = face[:k]
-            names = [self._idx_to_name(idx) for idx in face]
+            names = [self._idx_to_name(idx) for idx in candidates]
             candidates = [idx for idx in candidates if simi[sample][idx] >= thres]
             if len(candidates) == 0:
                 res.append(None)
