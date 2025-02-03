@@ -12,7 +12,9 @@ runtime:
     ipt_rgb: true
     allow_single_frame: false
     candidates: 5
-    thres: 0.55
+    min_box_size: 0.005
+    thres: 0.4
+    extra_thres: 0.28
     content_id: null
     restrict_list: null
     ground_truth: IBC

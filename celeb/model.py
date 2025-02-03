@@ -26,6 +26,8 @@ from config import config
 class RuntimeConfig(Data):
     fps: int
     thres: float
+    extra_thres: float
+    min_box_size: float
     candidates: int
     ipt_rgb: bool
     allow_single_frame: bool
@@ -147,17 +149,29 @@ class CelebRecognition(FrameModel):
             detections = [r for r in res[i] if r['confidence'] > 0.96]
             if len(detections) > 0:
                 for det_ind, det in enumerate(detections):
-                    face = _crop_face(f, [int(round(bi))
-                                      for bi in det['box']], h, w)
-                    face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
-                    cropped_lst.append(face)
-                    index_lst.append(i)
+                    
+                    
                     b = [float(bb) for bb in det['box']]
                     b[0], b[2] = round(b[0]/w, 4), round(b[2]/w, 4)
                     b[1], b[3] = round(b[1]/h, 4), round(b[3]/h, 4)
+
+                    if self._box_size(b) < self.config.min_box_size:
+                        continue
+
                     bb_lst.append(b)
 
+                    face = _crop_face(f, [int(round(bi))
+                                      for bi in det['box']], h, w)
+                    face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
+
+                    cropped_lst.append(face)
+                    index_lst.append(i)
+
+
         return cropped_lst, bb_lst, index_lst
+    
+    def _box_size(self, box: List[float]) -> float:
+        return abs(box[2] - box[0]) * abs(box[3] - box[1])
 
     def _resize(self, image: np.ndarray, scale=1, max_size=3840):
         h, w = image.shape[:2]
@@ -199,7 +213,7 @@ class CelebRecognition(FrameModel):
                 
         return res
             
-    def _tag_frames(self, frames, threshold_simi, candidates: int, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
+    def _tag_frames_extra(self, frames, threshold_simi, candidates: int, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
         # get cast pool
         cast_pool = None
         if content_id:
@@ -243,6 +257,111 @@ class CelebRecognition(FrameModel):
         
         return [r for r in res if r is not None]
     
+    def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
+        # get cast pool
+        cast_pool = None
+        if content_id:
+            cast_pool = self.cast_check.get(content_id, None)
+        elif restrict_list:
+            cast_pool = restrict_list
+        elif os.path.exists(os.path.join(self.pool_path, 'restrict.txt')):
+            with open(os.path.join(self.pool_path, 'restrict.txt'), 'r') as f:
+                cast_pool = [celeb.strip() for celeb in f.readlines()]
+        logger.info(f"Main cast pool: {cast_pool}")
+        # detect faces
+        for i, f in enumerate(frames):
+            maxdim = max(f.shape)
+            if maxdim > 3840:
+                frames[i] = self._resize(f)
+
+        cropped_lst, bb_lst, index_lst = self.detect_batch(frames)
+        logger.info(
+            f"Content id {content_id}, Celeb: # images has faces: {len(set(index_lst))}, # faces detected {len(index_lst)}, total # images: {len(frames)}")
+        if not cropped_lst:
+            return defaultdict(list)
+        cropped_lst_new = []
+        for crop in cropped_lst:
+            c = cv2.resize(crop, (112, 112))
+            # transpose input to (3, h, w)
+            c = np.transpose(c, (2, 0, 1))
+            cropped_lst_new.append(c)
+        cropped_lst = cropped_lst_new
+
+        f1s = self.model.get_feature(np.array(cropped_lst))
+
+        simi = np.dot(self.im_pool_feats, np.array(f1s).T)
+        top_idx = np.argmax(simi, 0)
+        scores = [float(simi[idx][i]) for i, idx in enumerate(top_idx)]
+
+        # create a intermediate result list to store all original tags
+        res_inter = defaultdict(list)
+        res_inter_tmp = defaultdict(list)
+
+        for idx, (score, topk, bbox, ind) in enumerate(zip(scores, top_idx, bb_lst, index_lst)):
+            if self.gt[topk] in self.id2name:
+                res_inter_tmp[idx] = (self.id2name[self.gt[topk]], score)
+            else:
+                res_inter_tmp[idx] = ("", score)
+            if score >= threshold_simi:
+                # celeb filtered by cast pool if available, otherwise keep the original threshold & do nothing
+                if self.gt[topk] in self.id2name and (cast_pool is None or self.id2name.get(self.gt[topk], '') in cast_pool):
+                    res_inter[idx] = (self.id2name[self.gt[topk]], score, list(bbox),
+                                        frames[ind].shape[0], frames[ind].shape[1])
+
+        tmp = {index_lst[k]: (v[0], v[1])
+                for k, v in res_inter_tmp.items()}  # if v[1]>0.4}
+        logger.info(f"Raw predictions: {tmp}")
+        # create a dictionary to store the mapping of name and face index
+        name_fraid = defaultdict(set)
+        for idx, v in res_inter.items():
+            name_fraid[v[0]].add(idx)
+        logger.info(f"Name mapping: {name_fraid}")
+
+        # assign all clusters the name tagged
+
+        if cluster_flag:
+            # cluster faces
+            face_im_simi = np.dot(np.array(f1s), np.array(f1s).T)
+            clusters = clustering(face_im_simi, threshold_cluster)
+
+            #n_clusters = len([k for k,v in name_fraid.items()])
+            #clusters = km(np.array(f1s), n_clusters)
+
+            logger.info(f"cluster sets: {clusters}")
+            logger.info(
+                f"clusters: {[[res_inter_tmp[i][0] for i in s] for s in clusters]}")
+            # majority vote to decide if adapt the current cluster
+            ids_name = {}
+            for c in clusters:
+                max_inter = 0
+                for k, v in name_fraid.items():
+                    if len(c.intersection(v)) > max_inter and len(c.intersection(v))/len(c) > cluster_ratio:
+                        side_nodes_scores = [res_inter[idx][1]
+                                                for idx in c.intersection(v)]
+                        mean_score = np.mean(side_nodes_scores)
+                        for i in c:
+                            if i in v:
+                                ids_name[i] = (k, None, 'main', index_lst[i])
+                            else:
+                                ids_name[i] = (
+                                    k, mean_score, "cluster", index_lst[i])
+                        max_inter = len(c.intersection(v))
+
+            res_inter = ids_name
+
+        res = defaultdict(list)
+        for k, v in res_inter.items():
+            ind = index_lst[k]
+            score = scores[k] if v[1] is None else v[1]
+            bbox = bb_lst[k]
+            topk = top_idx[k]
+            res[index_lst[k]].append((
+                v[0], score, list(
+                    bbox), frames[ind].shape[0], frames[ind].shape[1]
+            ))
+        logger.info(f"Content id {content_id}, Celeb prediction: {res}")
+        return res
+    
     # Celebrity model has different behavior based on cast information provided in the content metadata
     # Set the working content_id here. 
     def set_content(self, qid: str) -> None:
@@ -253,10 +372,18 @@ class CelebRecognition(FrameModel):
         img = img[:, :, ::-1]
         content_id = self.config.content_id
         restrict_list = self.config.restrict_list
-        res = self._tag_frames([img], self.config.thres, self.config.candidates, content_id=content_id, restrict_list=restrict_list)
+
         ret = []
-        for conf, player, _, box in res:
-            ret.append(FrameTag.from_dict({"text": player, "confidence": float(conf), "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}))
+        res = self._tag_frames([img], self.config.thres, content_id=content_id, restrict_list=restrict_list)[0]
+        if len(res) > 0:
+            ret = [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
+
+        if not ret:
+            logger.info("No faces detected, trying extra hard now.")
+            res = self._tag_frames_extra([img], self.config.extra_thres, self.config.candidates, content_id=content_id, restrict_list=restrict_list)
+            for conf, player, _, box in res:
+                ret.append(FrameTag.from_dict({"text": player, "confidence": float(conf), "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}))
+
         return ret
     
 def clustering(simi_matrix, thre):
