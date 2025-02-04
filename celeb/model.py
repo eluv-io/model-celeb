@@ -26,9 +26,9 @@ from config import config
 class RuntimeConfig(Data):
     fps: int
     thres: float
-    extra_thres: float
     min_box_size: float
     candidates: int
+    gamma: float
     ipt_rgb: bool
     allow_single_frame: bool
     ground_truth: str
@@ -149,8 +149,7 @@ class CelebRecognition(FrameModel):
             detections = [r for r in res[i] if r['confidence'] > 0.96]
             if len(detections) > 0:
                 for det_ind, det in enumerate(detections):
-                    
-                    
+        
                     b = [float(bb) for bb in det['box']]
                     b[0], b[2] = round(b[0]/w, 4), round(b[2]/w, 4)
                     b[1], b[3] = round(b[1]/h, 4), round(b[3]/h, 4)
@@ -198,20 +197,33 @@ class CelebRecognition(FrameModel):
         res = []
         for sample, face in enumerate(best_idx):
             candidates = face[:k]
-            names = [self._idx_to_name(idx) for idx in candidates]
+            #names = [self._idx_to_name(idx) for idx in candidates]
             candidates = [idx for idx in candidates if simi[sample][idx] >= thres]
+            print([(self._idx_to_name(idx), simi[sample][idx]) for idx in candidates])
             if len(candidates) == 0:
                 res.append(None)
                 continue
-            name2score = defaultdict(lambda: 0)
-            for idx in candidates:
-                name2score[self._idx_to_name(idx)] = max(name2score[self._idx_to_name(idx)], simi[sample][idx])
-            scores = [[names.count(name), name2score[name], name, idx] for idx, name in zip(candidates, names)]
-            scores = sorted(scores, reverse=True)
-            best = scores[0]
-            res.append(best[1:])
+            names = [self._idx_to_name(idx) for idx in candidates]
+            scores = [simi[sample][idx] for idx in candidates]
+            #name2score = defaultdict(lambda: 0)
+            #for idx in candidates:
+            #    name2score[self._idx_to_name(idx)] = max(name2score[self._idx_to_name(idx)], simi[sample][idx])
+            #scores = [[names.count(name), name2score[name], name, idx] for idx, name in zip(candidates, names)]
+            grouped = [[score, name, idx] for idx, score, name in zip(candidates, scores, names)]
+            name2score, best_scores = {}, {}
+            for name in set(names):
+                scores = [s[0] for s in grouped if s[1] == name]
+                name2score[name] = self._compute_score(scores)
+                best_scores[name] = max(scores)
+
+            best = max(name2score, key=name2score.get)
+            res.append([best_scores[best], best])
                 
         return res
+    
+    def _compute_score(self, scores: List[float]):
+        gamma = self.config.gamma
+        return sum(np.exp(gamma * s) for s in scores)
             
     def _tag_frames_extra(self, frames, threshold_simi, candidates: int, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
         # get cast pool
@@ -374,15 +386,15 @@ class CelebRecognition(FrameModel):
         restrict_list = self.config.restrict_list
 
         ret = []
-        res = self._tag_frames([img], self.config.thres, content_id=content_id, restrict_list=restrict_list)[0]
-        if len(res) > 0:
-            ret = [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
-
-        if not ret:
-            logger.info("No faces detected, trying extra hard now.")
-            res = self._tag_frames_extra([img], self.config.extra_thres, self.config.candidates, content_id=content_id, restrict_list=restrict_list)
-            for conf, player, _, box in res:
-                ret.append(FrameTag.from_dict({"text": player, "confidence": float(conf), "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}))
+        #res = self._tag_frames([img], self.config.thres, content_id=content_id, restrict_list=restrict_list)[0]
+        #if len(res) > 0:
+        #    ret = [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
+#
+        #if not ret:
+        logger.info("No faces detected, trying extra hard now.")
+        res = self._tag_frames_extra([img], self.config.thres, self.config.candidates, content_id=content_id, restrict_list=restrict_list)
+        for conf, player, box in res:
+            ret.append(FrameTag.from_dict({"text": player, "confidence": float(conf), "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}))
 
         return ret
     
