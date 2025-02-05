@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo keys:
+
 if ! ssh-add -l ; then
     echo ssh agent does not have any identities loaded, will not be able to build
     echo add them by running ssh-add on your local machine, or on the remote if you have keys there
@@ -7,8 +9,10 @@ if ! ssh-add -l ; then
     exit 1
 fi
 
+echo
+
 SCRIPT_PATH="$(dirname "$(realpath "$0")")"
 MODEL_PATH=$(yq -r .storage.model_path $SCRIPT_PATH/config.yml)
-rm -rf $SCRIPT_PATH/models
-cp -r $MODEL_PATH $SCRIPT_PATH/models
-podman build --format docker -t celeb . --network host --build-arg SSH_AUTH_SOCK=$SSH_AUTH_SOCK --volume "${SSH_AUTH_SOCK}:${SSH_AUTH_SOCK}"
+##rm -rf $SCRIPT_PATH/models
+rsync --progress --update --times --recursive --links --delete $MODEL_PATH/ $SCRIPT_PATH/models/
+podman build --format docker -t celeb . --network host --build-arg SSH_AUTH_SOCK=/tmp/ssh-auth-sock --volume "${SSH_AUTH_SOCK}:/tmp/ssh-auth-sock"
