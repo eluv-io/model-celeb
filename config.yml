@@ -2,7 +2,7 @@ device: cuda
 
 storage:
   model_path: /eluvio/ml/models/celeb
-  gt_path: /eluvio/ml/models/celeb/image_features
+  gt_path: /ml/models/celeb/image_features
 container:
   model_path: models 
   gt_path: models/image_features
