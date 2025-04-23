@@ -6,6 +6,7 @@ from marshmallow import Schema, fields, ValidationError
 from typing import List, Optional
 from common_ml.utils import nested_update
 from common_ml.model import default_tag
+import setproctitle
 
 from celeb.model import CelebRecognition
 from config import config
@@ -23,6 +24,7 @@ def run(file_paths: List[str], runtime_config: str=None):
     default_tag(model, file_paths, out_path)
         
 if __name__ == '__main__':
+    setproctitle.setproctitle('model-celeb')
     parser = argparse.ArgumentParser()
     parser.add_argument('file_paths', nargs='+', type=str)
     parser.add_argument('--config', type=str, required=False)
