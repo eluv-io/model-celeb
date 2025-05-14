@@ -11,10 +11,8 @@ runtime:
     fps: 4
     ipt_rgb: true
     allow_single_frame: false
-    candidates: 10
     min_box_size: 0.005
-    gamma: 10
-    thres: 0.325
+    thres: 0.4
     content_id: null
     restrict_list: null
     ground_truth: IBC

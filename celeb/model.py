@@ -27,8 +27,6 @@ class RuntimeConfig(Data):
     fps: int
     thres: float
     min_box_size: float
-    candidates: int
-    gamma: float
     ipt_rgb: bool
     allow_single_frame: bool
     ground_truth: str
@@ -166,7 +164,6 @@ class CelebRecognition(FrameModel):
                     cropped_lst.append(face)
                     index_lst.append(i)
 
-
         return cropped_lst, bb_lst, index_lst
     
     def _box_size(self, box: List[float]) -> float:
@@ -181,93 +178,6 @@ class CelebRecognition(FrameModel):
             h_new, w_new = int(h*scale), int(w*scale)
             return cv2.resize(image, (w_new, h_new))
         return
-    
-    def _idx_to_name(self, idx: int) -> str:
-        # TODO: CHECK THIS
-        return self.id2name.get(self.gt[idx], 'UNKNOWN')
-    
-    def _top_celebs(self, simi: np.ndarray, k: int, thres: float, cast_pool: Optional[List[str]]=None) -> List[List[Tuple[str, float, int]]]:
-        
-        for i in range(simi.shape[0]):
-            for idx, _ in enumerate(simi[i]):
-                if cast_pool and self._idx_to_name(idx) not in cast_pool:
-                    simi[i][idx] = 0
-                    
-        best_idx = np.argsort(simi, axis=1)[:, ::-1]
-        res = []
-        for sample, face in enumerate(best_idx):
-            candidates = face[:k]
-            #names = [self._idx_to_name(idx) for idx in candidates]
-            candidates = [idx for idx in candidates if simi[sample][idx] >= thres]
-            print([(self._idx_to_name(idx), simi[sample][idx]) for idx in candidates])
-            if len(candidates) == 0:
-                res.append(None)
-                continue
-            names = [self._idx_to_name(idx) for idx in candidates]
-            scores = [simi[sample][idx] for idx in candidates]
-            #name2score = defaultdict(lambda: 0)
-            #for idx in candidates:
-            #    name2score[self._idx_to_name(idx)] = max(name2score[self._idx_to_name(idx)], simi[sample][idx])
-            #scores = [[names.count(name), name2score[name], name, idx] for idx, name in zip(candidates, names)]
-            grouped = [[score, name, idx] for idx, score, name in zip(candidates, scores, names)]
-            name2score, best_scores = {}, {}
-            for name in set(names):
-                scores = [s[0] for s in grouped if s[1] == name]
-                name2score[name] = self._compute_score(scores)
-                best_scores[name] = max(scores)
-
-            best = max(name2score, key=name2score.get)
-            res.append([best_scores[best], best])
-                
-        return res
-    
-    def _compute_score(self, scores: List[float]):
-        gamma = self.config.gamma
-        return sum(np.exp(gamma * s) for s in scores)
-            
-    def _tag_frames_extra(self, frames, threshold_simi, candidates: int, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
-        # get cast pool
-        cast_pool = None
-        if content_id:
-            cast_pool = self.cast_check.get(content_id, None)
-        elif restrict_list:
-            cast_pool = restrict_list
-        elif os.path.exists(os.path.join(self.pool_path, 'restrict.txt')):
-            with open(os.path.join(self.pool_path, 'restrict.txt'), 'r') as f:
-                cast_pool = [celeb.strip() for celeb in f.readlines()]
-
-        logger.info(f"Main cast pool: {cast_pool}")
-        # detect faces
-        for i, f in enumerate(frames):
-            maxdim = max(f.shape)
-            if maxdim > 3840:
-                frames[i] = self._resize(f)
-
-        cropped_lst, bb_lst, index_lst = self.detect_batch(frames)
-        logger.info(
-            f"Content id {content_id}, Celeb: # images has faces: {len(set(index_lst))}, # faces detected {len(index_lst)}, total # images: {len(frames)}")
-        if not cropped_lst:
-            return defaultdict(list)
-        cropped_lst_new = []
-        for crop in cropped_lst:
-            c = cv2.resize(crop, (112, 112))
-            # transpose input to (3, h, w)
-            c = np.transpose(c, (2, 0, 1))
-            cropped_lst_new.append(c)
-        cropped_lst = cropped_lst_new
-
-        f1s = self.model.get_feature(np.array(cropped_lst))
-
-        simi = np.dot(self.im_pool_feats, np.array(f1s).T).T
-          
-        res = self._top_celebs(simi, candidates, threshold_simi, cast_pool)
-        
-        # add bounding boxes
-        for i, bb in enumerate(bb_lst):
-            if res[i] is not None:
-                res[i].append(bb)
-        
-        return [r for r in res if r is not None]
     
     def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
         # get cast pool
@@ -374,29 +284,14 @@ class CelebRecognition(FrameModel):
         logger.info(f"Content id {content_id}, Celeb prediction: {res}")
         return res
     
-    # Celebrity model has different behavior based on cast information provided in the content metadata
-    # Set the working content_id here. 
-    def set_content(self, qid: str) -> None:
-        self.content_id = qid
-    
     def tag(self, img: np.ndarray) -> List[FrameTag]:
-        # convert from rgb to bgr
-        img = img[:, :, ::-1]
         content_id = self.config.content_id
-        restrict_list = self.config.restrict_list
-
-        ret = []
-        #res = self._tag_frames([img], self.config.thres, content_id=content_id, restrict_list=restrict_list)[0]
-        #if len(res) > 0:
-        #    ret = [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
-#
-        #if not ret:
-        logger.info("No faces detected, trying extra hard now.")
-        res = self._tag_frames_extra([img], self.config.thres, self.config.candidates, content_id=content_id, restrict_list=restrict_list)
-        for conf, player, box in res:
-            ret.append(FrameTag.from_dict({"text": player, "confidence": float(conf), "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}))
-
-        return ret
+        res = self._tag_frames([img], self.config.thres, content_id=content_id)
+        if len(res[0]) == 0:
+            res = []
+        else:
+            res = res[0]
+        return [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
     
 def clustering(simi_matrix, thre):
     cluster = []
