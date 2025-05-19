@@ -26,6 +26,7 @@ from config import config
 class RuntimeConfig(Data):
     fps: int
     thres: float
+    thres_cast: float
     min_box_size: float
     ipt_rgb: bool
     allow_single_frame: bool
@@ -179,8 +180,9 @@ class CelebRecognition(FrameModel):
             return cv2.resize(image, (w_new, h_new))
         return
     
-    def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
+    def _tag_frames(self, frames, threshold_simi, threshold_simi_cast, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
         # get cast pool
+        logger.debug(f"threshold_simi: {threshold_simi}, threshold_simi_cast: {threshold_simi_cast}, cluster_flag: {cluster_flag}")
         cast_pool = None
         if content_id:
             cast_pool = self.cast_check.get(content_id, None)
@@ -189,7 +191,14 @@ class CelebRecognition(FrameModel):
         elif os.path.exists(os.path.join(self.pool_path, 'restrict.txt')):
             with open(os.path.join(self.pool_path, 'restrict.txt'), 'r') as f:
                 cast_pool = [celeb.strip() for celeb in f.readlines()]
+        
         logger.info(f"Main cast pool: {cast_pool}")
+        if cast_pool:
+            cast_pool_invalid = [ c for c in cast_pool if len(self.id2name[c]) == 0 ]
+
+            if cast_pool_invalid:
+                logger.warn("people in cast pool not in ground truth: " + " ".join(cast_pool_invalid))
+
         # detect faces
         for i, f in enumerate(frames):
             maxdim = max(f.shape)
@@ -224,11 +233,18 @@ class CelebRecognition(FrameModel):
                 res_inter_tmp[idx] = (self.id2name[self.gt[topk]], score)
             else:
                 res_inter_tmp[idx] = ("", score)
+
+            if self.gt[topk] not in self.id2name:
+                continue
+            
+            if cast_pool is not None and self.id2name[self.gt[topk]] in cast_pool:
+                target_thresh = threshold_simi_cast
+            else:
+                target_thresh = threshold_simi
+
             if score >= threshold_simi:
-                # celeb filtered by cast pool if available, otherwise keep the original threshold & do nothing
-                if self.gt[topk] in self.id2name and (cast_pool is None or self.id2name.get(self.gt[topk], '') in cast_pool):
-                    res_inter[idx] = (self.id2name[self.gt[topk]], score, list(bbox),
-                                        frames[ind].shape[0], frames[ind].shape[1])
+                res_inter[idx] = (self.id2name[self.gt[topk]], score, list(bbox),
+                                    frames[ind].shape[0], frames[ind].shape[1])
 
         tmp = {index_lst[k]: (v[0], v[1])
                 for k, v in res_inter_tmp.items()}  # if v[1]>0.4}
@@ -286,7 +302,7 @@ class CelebRecognition(FrameModel):
     
     def tag(self, img: np.ndarray) -> List[FrameTag]:
         content_id = self.config.content_id
-        res = self._tag_frames([img], self.config.thres, content_id=content_id)
+        res = self._tag_frames([img], self.config.thres, self.config.thres_cast, content_id=content_id, restrict_list = self.config.restrict_list)
         if len(res[0]) == 0:
             res = []
         else:
