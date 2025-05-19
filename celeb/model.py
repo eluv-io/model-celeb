@@ -57,6 +57,7 @@ class CelebRecognition(FrameModel):
         im_pool_feats = np.load(self.args.im_pool_feats)
         self.im_pool_feats = im_pool_feats.astype(np.float32)
         self.gt = np.load(self.args.gt)
+        self.logged = False
         with open(self.args.id2name, 'r') as f:
             self.id2name = json.load(f)         
             self._create_name2id()
@@ -187,9 +188,9 @@ class CelebRecognition(FrameModel):
             return cv2.resize(image, (w_new, h_new))
         return
     
+    
     def _tag_frames(self, frames, threshold_simi, threshold_simi_cast, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
         # get cast pool
-        logger.debug(f"threshold_simi: {threshold_simi}, threshold_simi_cast: {threshold_simi_cast}, cluster_flag: {cluster_flag}")
         cast_pool = None
         if content_id:
             cast_pool = self.cast_check.get(content_id, None)
@@ -199,12 +200,15 @@ class CelebRecognition(FrameModel):
             with open(os.path.join(self.pool_path, 'restrict.txt'), 'r') as f:
                 cast_pool = [celeb.strip() for celeb in f.readlines()]
         
-        logger.info(f"Main cast pool: {cast_pool}")
-        if cast_pool:
-            cast_pool_invalid = [ c for c in cast_pool if len(self.name2id[c]) == 0 ]
+        if not self.logged:
+            self.logged = True
+            logger.debug(f"threshold_simi: {threshold_simi}, threshold_simi_cast: {threshold_simi_cast}, cluster_flag: {cluster_flag}")
+            logger.info(f"Main cast pool: {cast_pool}")
+            if cast_pool:
+                cast_pool_invalid = [ c for c in cast_pool if len(self.name2id[c]) == 0 ]
 
-            if cast_pool_invalid:
-                logger.warning("people in cast pool not in ground truth: " + " ".join(cast_pool_invalid))
+                if cast_pool_invalid:
+                    logger.warning("people in cast pool but not in ground truth: " + " ".join(cast_pool_invalid))
 
         # detect faces
         for i, f in enumerate(frames):
@@ -249,7 +253,7 @@ class CelebRecognition(FrameModel):
             else:
                 target_thresh = threshold_simi
 
-            if score >= threshold_simi:
+            if score >= target_thresh:
                 res_inter[idx] = (self.id2name[self.gt[topk]], score, list(bbox),
                                     frames[ind].shape[0], frames[ind].shape[1])
 
