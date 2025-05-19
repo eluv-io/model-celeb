@@ -2,6 +2,7 @@
 import argparse
 import os
 import json
+from loguru import logger
 from marshmallow import Schema, fields, ValidationError
 from typing import List, Optional
 from common_ml.utils import nested_update
@@ -19,6 +20,7 @@ def run(file_paths: List[str], runtime_config: str=None):
     else:
         cfg = json.loads(runtime_config)
         cfg = nested_update(config["runtime"]["default"], cfg)
+    logger.debug("config:\n" + json.dumps(cfg, indent = 2))
     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tags')
     model = CelebRecognition(config["container"]["model_path"], runtime_config=cfg)
     default_tag(model, file_paths, out_path)
