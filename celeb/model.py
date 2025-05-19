@@ -58,12 +58,19 @@ class CelebRecognition(FrameModel):
         self.im_pool_feats = im_pool_feats.astype(np.float32)
         self.gt = np.load(self.args.gt)
         with open(self.args.id2name, 'r') as f:
-            self.id2name = json.load(f)
+            self.id2name = json.load(f)         
+            self._create_name2id()
         with open(self.args.cast_check, 'r') as f:
             self.cast_check = json.load(f)
             self.cast_check = {
                 k: set(v) if v else None for k, v in self.cast_check.items()}
             
+    def _create_name2id(self):
+        rev = defaultdict(list)
+        for id, name in self.id2name.items():
+            rev[name].append(id)
+        self.name2id = rev
+        
     def _add_params(self):
         io_path = self.model_input_path
         gt_path = self.pool_path
@@ -194,10 +201,10 @@ class CelebRecognition(FrameModel):
         
         logger.info(f"Main cast pool: {cast_pool}")
         if cast_pool:
-            cast_pool_invalid = [ c for c in cast_pool if len(self.id2name[c]) == 0 ]
+            cast_pool_invalid = [ c for c in cast_pool if len(self.name2id[c]) == 0 ]
 
             if cast_pool_invalid:
-                logger.warn("people in cast pool not in ground truth: " + " ".join(cast_pool_invalid))
+                logger.warning("people in cast pool not in ground truth: " + " ".join(cast_pool_invalid))
 
         # detect faces
         for i, f in enumerate(frames):
