@@ -2,7 +2,7 @@ import os
 import time
 import json
 from collections import defaultdict
-from typing import List, Optional, Union, Tuple
+from typing import List, Optional, Union
 
 import networkx as nx
 from easydict import EasyDict as edict
@@ -14,7 +14,6 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from facenet_pytorch import MTCNN
 from dataclasses import dataclass, asdict
-from marshmallow import Schema, fields
 
 from . import face_model
 from common_ml.tags import FrameTag
@@ -108,20 +107,18 @@ class CelebRecognition(FrameModel):
         index_lst = []
         bb_lst = []
         t_s = time.time()
-
         if all([f.shape == frames[0].shape for f in frames]):
-            boxes, probs, keypoints = self.detector.detect(
-                [cv2.cvtColor(f, cv2.COLOR_BGR2RGB) for f in frames], landmarks=True)
+            boxes, probs, keypoints = self.detector.detect(frames, landmarks=True)
         else:
             boxes = []
             probs = []
             keypoints = []
             for f in frames:
-                box, prob, keypoint = self.detector.detect([cv2.cvtColor(f, cv2.COLOR_BGR2RGB)],
-                                                           landmarks=True)
+                box, prob, keypoint = self.detector.detect([f], landmarks=True)
                 boxes.extend(box)
                 probs.extend(prob)
                 keypoints.extend(keypoint)
+
 
         res = []
         for b, p, k in zip(boxes, probs, keypoints):
@@ -153,13 +150,13 @@ class CelebRecognition(FrameModel):
                     b[1], b[3] = round(b[1]/h, 4), round(b[3]/h, 4)
 
                     if self._box_size(b) < self.config.min_box_size:
+                        logger.debug("Face too small, skipping")
                         continue
 
                     bb_lst.append(b)
 
                     face = _crop_face(f, [int(round(bi))
                                       for bi in det['box']], h, w)
-                    face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
 
                     cropped_lst.append(face)
                     index_lst.append(i)
@@ -283,7 +280,7 @@ class CelebRecognition(FrameModel):
             ))
         logger.info(f"Content id {content_id}, Celeb prediction: {res}")
         return res
-    
+
     def tag(self, img: np.ndarray) -> List[FrameTag]:
         content_id = self.config.content_id
         res = self._tag_frames([img], self.config.thres, content_id=content_id)
@@ -292,7 +289,7 @@ class CelebRecognition(FrameModel):
         else:
             res = res[0]
         return [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
-    
+
 def clustering(simi_matrix, thre):
     cluster = []
     n = len(simi_matrix)

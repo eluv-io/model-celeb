@@ -2,8 +2,7 @@
 import argparse
 import os
 import json
-from marshmallow import Schema, fields, ValidationError
-from typing import List, Optional
+from typing import List
 from common_ml.utils import nested_update
 from common_ml.model import default_tag
 import setproctitle
@@ -22,7 +21,7 @@ def run(file_paths: List[str], runtime_config: str=None):
     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tags')
     model = CelebRecognition(config["container"]["model_path"], runtime_config=cfg)
     default_tag(model, file_paths, out_path)
-        
+
 if __name__ == '__main__':
     setproctitle.setproctitle('model-celeb')
     parser = argparse.ArgumentParser()
