@@ -76,8 +76,7 @@ class CelebRecognition(FrameModel):
         gt_path = self.pool_path
         params = edict({
             'image_size': [160, 160],
-            # 'model': os.path.join(io_path, 'models/model-r100-ii/model,0'),
-            'model': '',
+            'model': os.path.join(io_path, 'models/model-r100-ii/model,0'),
             'ga_model': '',  # 'path to load model'
             'gpu': -1,  # 'gpu id'
             'det': 0,  # 'mtcnn option, 1 means using R+O, 0 means detect from begining'
