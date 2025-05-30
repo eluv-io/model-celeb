@@ -50,7 +50,7 @@ class FaceModel:
             self.model_vgg = InceptionResnetV1(
                 pretrained='vggface2').to(args.device).eval()
             logging.info(f'loading vggface2')
-        if len(self.content_type) == 0 and len(args.model) > 0:
+        else:
             self.model = get_model(ctx, self.image_size, args.model, 'fc1')
         if len(args.ga_model) > 0:
             self.ga_model = get_model(
@@ -63,7 +63,7 @@ class FaceModel:
 
     def get_feature(self, aligned):
         """
-        Args: 
+        Args:
             aligned: (1, 3, image_size[0], image_size[1]))
         """
         input_blob = aligned
@@ -78,7 +78,7 @@ class FaceModel:
 
     def get_batch_features(self, aligned_batch, batch_size=32):
         """
-        Args: 
+        Args:
             aligned_batch: Batch of aligned images with shape (n_images, 3, image_size[0], image_size[1])
             batch_size: Number of images to process in a single pass
         """
@@ -89,6 +89,8 @@ class FaceModel:
         if self.model is not None:
             logging.info(f'inference with insight face')
             return self.get_batch_feature_insight(aligned_batch, batch_size)
+        else:
+            raise ValueError('No model loaded for feature extraction')
 
     def get_batch_feature_insight(self, aligned_batch, batch_size):
         n_images = len(aligned_batch)

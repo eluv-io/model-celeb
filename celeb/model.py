@@ -30,6 +30,7 @@ class RuntimeConfig(Data):
     ipt_rgb: bool
     allow_single_frame: bool
     ground_truth: str
+    content_type: str
     content_id: Optional[str] = None
     restrict_list: Optional[List[str]] = None
 
@@ -53,7 +54,7 @@ class CelebRecognition(FrameModel):
         # self.detector = cv2.dnn.readNetFromCaffe(
         #    self.args.res10ssd_prototxt_path, self.args.res10ssd_model_path)
         self.detector = MTCNN(
-            image_size=160,
+            image_size=self.args.image_size,
             keep_all=True,
             device=self.args.device
         )
@@ -75,7 +76,7 @@ class CelebRecognition(FrameModel):
         io_path = self.model_input_path
         gt_path = self.pool_path
         params = edict({
-            'image_size': [160, 160],
+            'image_size': [160, 160] if self.config.content_type == 'image' else [112, 112],
             'model': os.path.join(io_path, 'models/model-r100-ii/model,0'),
             'ga_model': '',  # 'path to load model'
             'gpu': -1,  # 'gpu id'
@@ -91,8 +92,8 @@ class CelebRecognition(FrameModel):
             'cast_check': os.path.join(io_path, 'ca_lookup.json'),
             'res10ssd_prototxt_path': os.path.join(io_path, 'face_detection_ssd/deploy.prototxt'),
             'res10ssd_model_path': os.path.join(io_path, 'face_detection_ssd/res10_300x300_ssd_iter_140000.caffemodel'),
-            'use_cuda': False,
             'content_type': self.config.content_type,
+            'use_cuda': False,
             'device': self.device
         })
         return params
