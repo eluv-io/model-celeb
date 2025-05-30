@@ -4,7 +4,7 @@ storage:
   model_path: /ml/models/celeb
   gt_path: /ml/models/celeb/image_features
 container:
-  model_path: models 
+  model_path: models
   gt_path: models/image_features
 runtime:
   default:
@@ -16,3 +16,4 @@ runtime:
     content_id: null
     restrict_list: null
     ground_truth: IBC
+    content_type: image
