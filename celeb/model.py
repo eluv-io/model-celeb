@@ -52,7 +52,11 @@ class CelebRecognition(FrameModel):
         self.args = self._add_params()
         # self.detector = cv2.dnn.readNetFromCaffe(
         #    self.args.res10ssd_prototxt_path, self.args.res10ssd_model_path)
-        self.detector = MTCNN(keep_all=True, device=self.args.device)
+        self.detector = MTCNN(
+            image_size=160,
+            keep_all=True,
+            device=self.args.device
+        )
         logger.info(
             f"MTCNN parameters stored on GPU: {next(self.detector.parameters()).is_cuda}")
         self.model = face_model.FaceModel(self.args)
