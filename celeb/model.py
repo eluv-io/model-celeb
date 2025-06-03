@@ -54,7 +54,7 @@ class CelebRecognition(FrameModel):
         # self.detector = cv2.dnn.readNetFromCaffe(
         #    self.args.res10ssd_prototxt_path, self.args.res10ssd_model_path)
         self.detector = MTCNN(
-            image_size=self.args.image_size,
+            image_size=self.args.image_size[0],
             keep_all=True,
             device=self.args.device
         )
