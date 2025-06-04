@@ -17,6 +17,6 @@ setup(
         'loguru',
         'numpy<1.20.0',
         'common_ml @ git+ssh://git@github.com/eluv-io/common-ml.git#egg=common_ml',
-        'quick_test_py @ git+https://github.com/eluv-io/quick_test_py.git#egg=quick_test_py'
+        'quick_test_py @ git+https://github.com/eluv-io/quick-test-py.git#egg=quick_test_py'
     ]
 )
