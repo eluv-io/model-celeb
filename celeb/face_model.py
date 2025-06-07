@@ -52,6 +52,7 @@ class FaceModel:
             logging.info(f'loading vggface2')
         else:
             self.model = get_model(ctx, self.image_size, args.model, 'fc1')
+            logging.info(f'loading insightface')
         if len(args.ga_model) > 0:
             self.ga_model = get_model(
                 ctx, self.image_size, args.ga_model, 'fc1')
