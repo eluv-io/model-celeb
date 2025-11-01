@@ -52,21 +52,27 @@ class CelebRecognition(FrameModel):
             f"MTCNN parameters stored on GPU: {next(self.detector.parameters()).is_cuda}")
         self.model = face_model.FaceModel(self.args)
         
+        logger.debug(f"feats {self.args.im_pool_feats}")
         im_pool_feats = np.load(self.args.im_pool_feats)
         self.im_pool_feats = im_pool_feats.astype(np.float32)
         self.gt = np.load(self.args.gt)
+
+        logger.debug(f"id2name: {self.args.id2name}")
         with open(self.args.id2name, 'r') as f:
             self.id2name = json.load(f)
+
+        logger.debug(f"cast check: {self.args.cast_check}")
         with open(self.args.cast_check, 'r') as f:
             self.cast_check = json.load(f)
             self.cast_check = {
-                k: set(v) if v else None for k, v in self.cast_check.items()}
-            
+                k: set(v) if v else None for k, v in self.cast_check.items()
+            }
+            logger.debug(f"loaded cast check for {len(self.cast_check)} contents")
+
     def _add_params(self):
         io_path = self.model_input_path
         gt_path = self.pool_path
         params = edict({
-
             'image_size': '112,112',
             # 'path to load model'
             'model': os.path.join(io_path, 'models/model-r100-ii/model,0'),
@@ -81,7 +87,7 @@ class CelebRecognition(FrameModel):
             'gt': os.path.join(gt_path, 'gt.npy'),
             # 'id to name map'
             'id2name': os.path.join(gt_path, 'id2name.json'),
-            'cast_check': os.path.join(io_path, 'ca_lookup.json'),
+            'cast_check': os.path.join(gt_path, 'ca_lookup.json'),
             'res10ssd_prototxt_path': os.path.join(io_path, 'face_detection_ssd/deploy.prototxt'),
             'res10ssd_model_path': os.path.join(io_path, 'face_detection_ssd/res10_300x300_ssd_iter_140000.caffemodel'),
             'use_cuda': False
