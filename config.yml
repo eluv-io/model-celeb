@@ -16,4 +16,4 @@ runtime:
     content_id: null
     restrict_list: null
     ground_truth: IBC
-    content_type: image
+    content_type: video
