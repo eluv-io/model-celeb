@@ -17,6 +17,7 @@ setup(
         'loguru',
         'setproctitle',
         'numpy<1.20.0',
+        'dacite',
         'common_ml @ git+https://github.com/eluv-io/common-ml.git#egg=common_ml'
     ]
 )

@@ -2,8 +2,9 @@ import os
 import time
 import json
 from collections import defaultdict
-from typing import List, Optional, Union
+from typing import List, Optional
 
+from dacite import from_dict
 import networkx as nx
 from easydict import EasyDict as edict
 from loguru import logger
@@ -13,38 +14,20 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from facenet_pytorch import MTCNN
-from dataclasses import dataclass, asdict
+from dataclasses import asdict
+from dacite import from_dict
 
 from . import face_model
 from common_ml.tags import FrameTag
 from common_ml.model import FrameModel
-from common_ml.types import Data
+
+from celeb.config import RuntimeConfig
 from config import config
 
 
-@dataclass
-class RuntimeConfig(Data):
-    fps: int
-    thres: float
-    min_box_size: float
-    ipt_rgb: bool
-    allow_single_frame: bool
-    ground_truth: str
-    content_type: str
-    content_id: Optional[str] = None
-    restrict_list: Optional[List[str]] = None
-
-    @staticmethod
-    def from_dict(data: dict) -> 'RuntimeConfig':
-        return RuntimeConfig(**data)
-
-
 class CelebRecognition(FrameModel):
-    def __init__(self, model_input_path: str, runtime_config: Union[dict, RuntimeConfig]) -> None:
-        if isinstance(config, dict):
-            self.config = RuntimeConfig.from_dict(runtime_config)
-        else:
-            self.config = runtime_config
+    def __init__(self, model_input_path: str, cfg: RuntimeConfig) -> None:
+        self.config = cfg
         self.model_input_path = model_input_path
         self.pool_path = os.path.join(
             config["container"]["gt_path"], self.config.ground_truth)
@@ -67,10 +50,14 @@ class CelebRecognition(FrameModel):
         self.gt = np.load(self.args.gt)
         with open(self.args.id2name, 'r') as f:
             self.id2name = json.load(f)
-        with open(self.args.cast_check, 'r') as f:
-            self.cast_check = json.load(f)
-            self.cast_check = {
-                k: set(v) if v else None for k, v in self.cast_check.items()}
+        if os.path.exists(self.args.cast_check):
+            with open(self.args.cast_check, 'r') as f:
+                self.cast_check = json.load(f)
+                self.cast_check = {
+                    k: set(v) if v else None for k, v in self.cast_check.items()}
+        else:
+            logger.warning("cast lookup file not found")
+            self.cast_check = {}
 
     def _add_params(self):
         io_path = self.model_input_path
@@ -99,7 +86,7 @@ class CelebRecognition(FrameModel):
         return params
 
     def set_config(self, config: dict) -> None:
-        self.config = RuntimeConfig.from_dict(config)
+        self.config = from_dict(RuntimeConfig, config)
 
     def get_config(self) -> dict:
         return asdict(self.config)
