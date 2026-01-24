@@ -2,8 +2,9 @@ import os
 import time
 import json
 from collections import defaultdict
-from typing import List, Optional, Union
+from typing import List, Optional
 
+from dacite import from_dict
 import networkx as nx
 from easydict import EasyDict as edict
 from loguru import logger
@@ -13,41 +14,33 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from facenet_pytorch import MTCNN
-from dataclasses import dataclass, asdict
+from dataclasses import asdict
+from dacite import from_dict
 
 from . import face_model
 from common_ml.tags import FrameTag
 from common_ml.model import FrameModel
-from common_ml.types import Data
+
+from celeb.config import RuntimeConfig
 from config import config
 
-@dataclass
-class RuntimeConfig(Data):
-    fps: int
-    thres: float
-    min_box_size: float
-    ipt_rgb: bool
-    allow_single_frame: bool
-    ground_truth: str
-    content_id: Optional[str]=None
-    restrict_list: Optional[List[str]]=None
-
-    @staticmethod
-    def from_dict(data: dict) -> 'RuntimeConfig':
-        return RuntimeConfig(**data)
 
 class CelebRecognition(FrameModel):
-    def __init__(self, model_input_path: str, runtime_config: Union[dict, RuntimeConfig]) -> None:
-        if isinstance(config, dict):
-            self.config = RuntimeConfig.from_dict(runtime_config)
-        else:
-            self.config = runtime_config
+    def __init__(self, model_input_path: str, cfg: RuntimeConfig) -> None:
+        self.config = cfg
         self.model_input_path = model_input_path
-        self.pool_path = os.path.join(config["container"]["gt_path"], self.config.ground_truth)
+        self.pool_path = os.path.join(
+            config["container"]["gt_path"], self.config.ground_truth)
+        self.device = torch.device(
+            'cuda:0' if torch.cuda.is_available() else 'cpu')
         self.args = self._add_params()
         # self.detector = cv2.dnn.readNetFromCaffe(
         #    self.args.res10ssd_prototxt_path, self.args.res10ssd_model_path)
-        self.detector = MTCNN(keep_all=True, device=torch.device("cuda:0"))
+        self.detector = MTCNN(
+            image_size=self.args.image_size[0],
+            keep_all=True,
+            device=self.args.device
+        )
         logger.info(
             f"MTCNN parameters stored on GPU: {next(self.detector.parameters()).is_cuda}")
         self.model = face_model.FaceModel(self.args)
@@ -62,18 +55,21 @@ class CelebRecognition(FrameModel):
             self.id2name = json.load(f)
 
         logger.debug(f"cast check: {self.args.cast_check}")
-        with open(self.args.cast_check, 'r') as f:
-            self.cast_check = json.load(f)
-            self.cast_check = {
-                k: set(v) if v else None for k, v in self.cast_check.items()
-            }
-            logger.debug(f"loaded cast check for {len(self.cast_check)} contents")
+        if os.path.exists(self.args.cast_check):
+            with open(self.args.cast_check, 'r') as f:
+                self.cast_check = json.load(f)
+                self.cast_check = {
+                    k: set(v) if v else None for k, v in self.cast_check.items()
+                }
+                logger.debug(f"loaded cast check for {len(self.cast_check)} contents")
+        else:
+            self.cast_check = {}
 
     def _add_params(self):
         io_path = self.model_input_path
         gt_path = self.pool_path
         params = edict({
-            'image_size': '112,112',
+            'image_size': [160, 160] if self.config.content_type == 'image' else [112, 112],
             # 'path to load model'
             'model': os.path.join(io_path, 'models/model-r100-ii/model,0'),
             'ga_model': '',  # 'path to load model'
@@ -90,12 +86,14 @@ class CelebRecognition(FrameModel):
             'cast_check': os.path.join(gt_path, 'ca_lookup.json'),
             'res10ssd_prototxt_path': os.path.join(io_path, 'face_detection_ssd/deploy.prototxt'),
             'res10ssd_model_path': os.path.join(io_path, 'face_detection_ssd/res10_300x300_ssd_iter_140000.caffemodel'),
-            'use_cuda': False
+            'content_type': self.config.content_type,
+            'use_cuda': False,
+            'device': self.device
         })
         return params
-    
+
     def set_config(self, config: dict) -> None:
-        self.config = RuntimeConfig.from_dict(config)
+        self.config = from_dict(RuntimeConfig, config)
 
     def get_config(self) -> dict:
         return asdict(self.config)
@@ -114,7 +112,8 @@ class CelebRecognition(FrameModel):
         bb_lst = []
         t_s = time.time()
         if all([f.shape == frames[0].shape for f in frames]):
-            boxes, probs, keypoints = self.detector.detect(frames, landmarks=True)
+            boxes, probs, keypoints = self.detector.detect(
+                frames, landmarks=True)
         else:
             boxes = []
             probs = []
@@ -124,7 +123,6 @@ class CelebRecognition(FrameModel):
                 boxes.extend(box)
                 probs.extend(prob)
                 keypoints.extend(keypoint)
-
 
         res = []
         for b, p, k in zip(boxes, probs, keypoints):
@@ -150,7 +148,7 @@ class CelebRecognition(FrameModel):
             detections = [r for r in res[i] if r['confidence'] > 0.96]
             if len(detections) > 0:
                 for det_ind, det in enumerate(detections):
-        
+
                     b = [float(bb) for bb in det['box']]
                     b[0], b[2] = round(b[0]/w, 4), round(b[2]/w, 4)
                     b[1], b[3] = round(b[1]/h, 4), round(b[3]/h, 4)
@@ -161,14 +159,14 @@ class CelebRecognition(FrameModel):
 
                     bb_lst.append(b)
 
-                    face = _crop_face(f, [int(round(bi))
-                                      for bi in det['box']], h, w)
+                    face = _crop_face(
+                        f, [int(round(bi)) for bi in det['box']], h, w)
 
                     cropped_lst.append(face)
                     index_lst.append(i)
 
         return cropped_lst, bb_lst, index_lst
-    
+
     def _box_size(self, box: List[float]) -> float:
         return abs(box[2] - box[0]) * abs(box[3] - box[1])
 
@@ -181,8 +179,8 @@ class CelebRecognition(FrameModel):
             h_new, w_new = int(h*scale), int(w*scale)
             return cv2.resize(image, (w_new, h_new))
         return
-    
-    def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]]=None):
+
+    def _tag_frames(self, frames, threshold_simi, threshold_cluster=0.3, cluster_ratio=0.1, cluster_flag=False, content_id=None, restrict_list: Optional[List[str]] = None):
         # get cast pool
         cast_pool = None
         if content_id:
@@ -206,13 +204,14 @@ class CelebRecognition(FrameModel):
             return defaultdict(list)
         cropped_lst_new = []
         for crop in cropped_lst:
-            c = cv2.resize(crop, (112, 112))
+            c = cv2.resize(crop, tuple(self.args.image_size))
             # transpose input to (3, h, w)
             c = np.transpose(c, (2, 0, 1))
             cropped_lst_new.append(c)
         cropped_lst = cropped_lst_new
 
-        f1s = self.model.get_feature(np.array(cropped_lst))
+        f1s = self.model.get_batch_features(
+            aligned_batch=np.array(cropped_lst), batch_size=32)
 
         simi = np.dot(self.im_pool_feats, np.array(f1s).T)
         top_idx = np.argmax(simi, 0)
@@ -230,11 +229,12 @@ class CelebRecognition(FrameModel):
             if score >= threshold_simi:
                 # celeb filtered by cast pool if available, otherwise keep the original threshold & do nothing
                 if self.gt[topk] in self.id2name and (cast_pool is None or self.id2name.get(self.gt[topk], '') in cast_pool):
-                    res_inter[idx] = (self.id2name[self.gt[topk]], score, list(bbox),
-                                        frames[ind].shape[0], frames[ind].shape[1])
+                    res_inter[idx] = (
+                        self.id2name[self.gt[topk]], score, list(bbox),
+                        frames[ind].shape[0], frames[ind].shape[1])
 
         tmp = {index_lst[k]: (v[0], v[1])
-                for k, v in res_inter_tmp.items()}  # if v[1]>0.4}
+               for k, v in res_inter_tmp.items()}  # if v[1]>0.4}
         logger.info(f"Raw predictions: {tmp}")
         # create a dictionary to store the mapping of name and face index
         name_fraid = defaultdict(set)
@@ -249,8 +249,8 @@ class CelebRecognition(FrameModel):
             face_im_simi = np.dot(np.array(f1s), np.array(f1s).T)
             clusters = clustering(face_im_simi, threshold_cluster)
 
-            #n_clusters = len([k for k,v in name_fraid.items()])
-            #clusters = km(np.array(f1s), n_clusters)
+            # n_clusters = len([k for k,v in name_fraid.items()])
+            # clusters = km(np.array(f1s), n_clusters)
 
             logger.info(f"cluster sets: {clusters}")
             logger.info(
@@ -261,8 +261,9 @@ class CelebRecognition(FrameModel):
                 max_inter = 0
                 for k, v in name_fraid.items():
                     if len(c.intersection(v)) > max_inter and len(c.intersection(v))/len(c) > cluster_ratio:
-                        side_nodes_scores = [res_inter[idx][1]
-                                                for idx in c.intersection(v)]
+                        side_nodes_scores = [
+                            res_inter[idx][1]
+                            for idx in c.intersection(v)]
                         mean_score = np.mean(side_nodes_scores)
                         for i in c:
                             if i in v:
@@ -296,6 +297,7 @@ class CelebRecognition(FrameModel):
             res = res[0]
         return [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
 
+
 def clustering(simi_matrix, thre):
     cluster = []
     n = len(simi_matrix)
@@ -308,6 +310,7 @@ def clustering(simi_matrix, thre):
     G.add_edges_from(cluster)
     new_cluster = list(nx.connected_components(G))
     return new_cluster
+
 
 def km(x, n_clusters):
     kmeans = KMeans(n_clusters=n_clusters, n_jobs=-1, random_state=22)
