@@ -18,8 +18,8 @@ from dataclasses import asdict
 from dacite import from_dict
 
 from . import face_model
-from common_ml.tags import FrameTag
-from common_ml.model import FrameModel
+from common_ml.tagging.models.tag_types import FrameTag
+from common_ml.tagging.models.frame_based import FrameModel
 
 from celeb.config import RuntimeConfig
 from config import config
@@ -288,14 +288,22 @@ class CelebRecognition(FrameModel):
         logger.info(f"Content id {content_id}, Celeb prediction: {res}")
         return res
 
-    def tag(self, img: np.ndarray) -> List[FrameTag]:
+    def tag_frame(self, img: np.ndarray) -> List[FrameTag]:
         content_id = self.config.content_id
         res = self._tag_frames([img], self.config.thres, content_id=content_id)
         if len(res[0]) == 0:
             res = []
         else:
             res = res[0]
-        return [FrameTag.from_dict({"text": text, "confidence": conf, "box": {"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}}) for text, conf, box, _, _ in res]
+        out = []
+        for text, conf, box, _, _ in res:
+            out.append(
+                FrameTag(
+                    tag=text,
+                    box={"x1": round(box[0], 4), "y1": round(box[1], 4), "x2": round(box[2], 4), "y2":  round(box[3], 4)}
+                )
+            )
+        return out
 
 
 def clustering(simi_matrix, thre):
