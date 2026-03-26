@@ -19,4 +19,4 @@ if __name__ == '__main__':
 
     model = CelebRecognition(model_input_path=config["container"]["model_path"], cfg=params)
 
-    run_default(model, fps=params.fps, continue_on_error=params.continue_on_error)
+    run_default(model)
