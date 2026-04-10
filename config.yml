@@ -6,3 +6,5 @@ storage:
 container:
   model_path: models
   gt_path: models/image_features
+ground_truth:
+  url: https://tagging.ai.contentfabric.io/ground-truth

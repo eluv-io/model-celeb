@@ -26,11 +26,11 @@ from config import config
 
 
 class CelebRecognition(FrameModel):
-    def __init__(self, model_input_path: str, cfg: RuntimeConfig) -> None:
+    def __init__(self, model_input_path: str, pool_path: str, cfg: RuntimeConfig) -> None:
         self.config = cfg
         self.model_input_path = model_input_path
-        self.pool_path = os.path.join(
-            config["container"]["gt_path"], self.config.ground_truth)
+    
+        self.pool_path = pool_path
         self.device = torch.device(
             'cuda:0' if torch.cuda.is_available() else 'cpu')
         self.args = self._add_params()
