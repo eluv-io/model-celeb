@@ -21,10 +21,12 @@ if __name__ == '__main__':
     params = from_dict(RuntimeConfig, data=params)
 
     token = os.getenv("ELV_TOKEN")
-    if token is None:
-        raise ValueError("ELV_TOKEN environment variable not set")
 
     fetcher = GroundTruthFetcher(url=config["ground_truth"]["url"], token=token, base_dir=config["container"]["gt_path"])
+
+    if fetcher.need_fetch(params.ground_truth):
+        if token is None:
+            raise ValueError("ELV_TOKEN environment variable not set and we need to fetch a pool!")
 
     # resolve gt pool
     pool = fetcher.fetch(params.ground_truth)
