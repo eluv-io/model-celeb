@@ -28,6 +28,13 @@ from config import config
 class CelebRecognition(FrameModel):
     def __init__(self, model_input_path: str, pool_path: str, cfg: RuntimeConfig) -> None:
         self.config = cfg
+
+        if self.config.thres == -1:
+            if self.config.ground_truth == "IBC":
+                self.config.thres = 0.55
+            else:
+                self.config.thres = 0.4
+
         self.model_input_path = model_input_path
     
         self.pool_path = pool_path

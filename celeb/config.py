@@ -3,7 +3,7 @@ from typing import List, Optional
 
 @dataclass
 class RuntimeConfig:
-    thres: float = 0.4
+    thres: float = -1
     min_box_size: float = 0
     ground_truth: str = "IBC"
     content_type: str = "video"
