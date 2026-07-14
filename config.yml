@@ -6,14 +6,5 @@ storage:
 container:
   model_path: models
   gt_path: models/image_features
-runtime:
-  default:
-    fps: 4
-    ipt_rgb: true
-    allow_single_frame: false
-    min_box_size: 0
-    thres: 0.4
-    content_id: null
-    restrict_list: null
-    ground_truth: IBC
-    content_type: video
+ground_truth:
+  url: https://tagging.ai.contentfabric.io/ground-truth
