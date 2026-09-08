@@ -1,3 +1,4 @@
 IMAGE_NAME := celeb
 
-include buildscripts/Makefile
+include buildscripts/Makefile.container
+
