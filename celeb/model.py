@@ -306,7 +306,7 @@ class CelebRecognition(FrameModel):
         return res
 
     def tag_frame(self, img: np.ndarray) -> List[FrameTag]:
-        content_id = self.config.content_id
+        content_id = self.config.content_id or os.getenv("ELV_CONTENT")
         res = self._tag_frames([img], self.config.thres, content_id=content_id)
         if len(res[0]) == 0:
             res = []
