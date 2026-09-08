@@ -31,9 +31,11 @@ class CelebRecognition(FrameModel):
 
         if self.config.thres == -1:
             if self.config.ground_truth == "IBC":
-                self.config.thres = 0.55
+                self.config.thres = 0.56
             else:
-                self.config.thres = 0.4
+                self.config.thres = 0.55
+
+        logger.debug(f"self.config.thres = {self.config.thres}")
 
         self.model_input_path = model_input_path
     
