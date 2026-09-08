@@ -77,6 +77,14 @@ class CelebRecognition(FrameModel):
     def _add_params(self):
         io_path = self.model_input_path
         gt_path = self.pool_path
+
+        if os.path.exists(os.path.join(os.path.join(gt_path, 'ca_lookup.json'))):
+            ca_lookup = os.path.join(gt_path, 'ca_lookup.json')
+        else:
+            ca_lookup = os.path.join(io_path, 'models/image_features/ca_lookup.json')
+
+        logger.debug(f"ca_lookup: ${ca_lookup}")
+
         params = edict({
             'image_size': [160, 160] if self.config.content_type == 'image' else [112, 112],
             # 'path to load model'
@@ -92,7 +100,7 @@ class CelebRecognition(FrameModel):
             'gt': os.path.join(gt_path, 'gt.npy'),
             # 'id to name map'
             'id2name': os.path.join(gt_path, 'id2name.json'),
-            'cast_check': os.path.join(gt_path, 'ca_lookup.json'),
+            'cast_check': ca_lookup,
             'res10ssd_prototxt_path': os.path.join(io_path, 'face_detection_ssd/deploy.prototxt'),
             'res10ssd_model_path': os.path.join(io_path, 'face_detection_ssd/res10_300x300_ssd_iter_140000.caffemodel'),
             'content_type': self.config.content_type,
