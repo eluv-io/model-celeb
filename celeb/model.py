@@ -81,9 +81,9 @@ class CelebRecognition(FrameModel):
         if os.path.exists(os.path.join(os.path.join(gt_path, 'ca_lookup.json'))):
             ca_lookup = os.path.join(gt_path, 'ca_lookup.json')
         else:
-            ca_lookup = os.path.join(io_path, 'models/image_features/ca_lookup.json')
+            ca_lookup = os.path.join(io_path, 'image_features/ca_lookup.json')
 
-        logger.debug(f"ca_lookup: ${ca_lookup}")
+        logger.debug(f"ca_lookup: {ca_lookup}")
 
         params = edict({
             'image_size': [160, 160] if self.config.content_type == 'image' else [112, 112],
