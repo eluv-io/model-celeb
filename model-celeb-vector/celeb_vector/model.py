@@ -111,9 +111,9 @@ class CelebVectorizer(FrameModel):
             # emitted vector is exactly unit-length (cosine == dot for the vector DB).
             v = v / (np.linalg.norm(v) + 1e-12)
             out.append(FrameTag(
-                tag="",  # resolve identity downstream against the pool (?)
+                tag="",
                 vector=v.tolist(),
                 box={"x1": nb[0], "y1": nb[1], "x2": nb[2], "y2": nb[3]},
-                additional_info={"model": _MODEL_VERSION, "dim": int(v.shape[0])}, # vector metadata for validation
+                additional_info={"box": {"x1": nb[0], "y1": nb[1], "x2": nb[2], "y2": nb[3]}},
             ))
         return out
