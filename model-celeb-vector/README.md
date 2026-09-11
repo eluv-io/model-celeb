@@ -8,6 +8,30 @@ embedding per face as a vector tag.
 This is a subdirectory of `model-celeb/` and **reuses its `celeb` package unchanged**
 (`FaceModel`, the InsightFace r100 embedder). It standardizes image and video embeddings to use InsightFace r100 for one comparable index in the vector DB. It persists the raw embeddings to a vector DB so adding to the ground truth pool becomes fast matrix-vecotr multiplication against the stored vectors rather than a full reprocess (`model-celeb` detects, embeds, and matches against a celebrity pool in a single pass). Identity matching and clustering move downstream to query time.
 
+## Install
+
+Installable straight from GitHub. The distribution is rooted at this subdirectory, and bundles
+the parent repo's `celeb` package alongside `celeb_vector`, so a single install gets both:
+
+```
+pip install "git+https://github.com/eluv-io/model-celeb.git@vector-faces#subdirectory=model-celeb-vector"
+```
+
+```python
+from celeb_vector import CelebVectorizer, RuntimeConfig
+
+model = CelebVectorizer(model_input_path="<dir containing models/model-r100-ii/>", cfg=RuntimeConfig())
+```
+
+Two things to note:
+
+- **Python 3.7-3.9 only** (enforced via `python_requires`). `mxnet-cu101==1.9.1`, `torch==1.9.0`
+  and `numpy<1.20` have no wheels beyond cp39, and mxnet needs a CUDA 10.1 userspace. The
+  container pins 3.8.
+- **Weights are not shipped.** `CelebVectorizer(model_input_path=...)` expects the InsightFace
+  r100 weights at `<model_input_path>/models/model-r100-ii/model,0` - fetch them with the
+  parent repo's [`pull-models`](../pull-models) script.
+
 ## Output
 
 Each detected face becomes a `Tag` with:

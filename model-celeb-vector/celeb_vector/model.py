@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import sys
 from dataclasses import asdict
 from typing import List
 
@@ -13,9 +12,6 @@ from easydict import EasyDict as edict
 from facenet_pytorch import MTCNN
 from loguru import logger
 
-# model-celeb-vector is nested under model-celeb, whose `celeb` package sits three levels
-# up from this file (locally). (In the container both packages sit side by side under the workdir.)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from celeb import face_model
 
 from common_ml.tagging.models.frame_based import FrameModel

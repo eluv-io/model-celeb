@@ -4,7 +4,12 @@ from setuptools import setup
 setup(
     name='celeb_vector',
     version='0.1',
-    packages=['celeb_vector'],
+    packages=['celeb_vector', 'celeb'],
+    package_dir={
+        'celeb_vector': 'celeb_vector',
+        'celeb': '../celeb',
+    },
+    python_requires='>=3.7,<3.10',
     install_requires=[
         'opencv-python',
         'easydict==1.9',
