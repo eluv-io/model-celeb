@@ -1,3 +1,6 @@
 [submodule "buildscripts"]
 	path = buildscripts
 	url = https://github.com/qluvio/buildscripts.git
+[submodule "model-celeb-vector/buildscripts"]
+	path = model-celeb-vector/buildscripts
+	url = git@github.com:qluvio/buildscripts

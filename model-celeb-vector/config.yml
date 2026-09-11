@@ -1,0 +1,7 @@
+device: cuda
+
+storage:
+  # InsightFace r100 weights
+  model_path: /ml/models/celeb_detection
+container:
+  model_path: models
