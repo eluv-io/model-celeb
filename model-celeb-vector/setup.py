@@ -7,7 +7,7 @@ setup(
     packages=['celeb_vector', 'celeb'],
     package_dir={
         'celeb_vector': 'celeb_vector',
-        'celeb': '../celeb',
+        'celeb': 'celeb',
     },
     python_requires='>=3.7,<3.10',
     install_requires=[

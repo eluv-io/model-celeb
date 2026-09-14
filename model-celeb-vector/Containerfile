@@ -25,6 +25,7 @@ RUN ssh-keyscan -t rsa github.com >> /root/.ssh/known_hosts
 
 COPY model-celeb-vector/setup.py .
 RUN mkdir -p celeb_vector
+RUN mkdir -p celeb
 
 RUN /opt/conda/envs/mlpod/bin/pip install .
 
