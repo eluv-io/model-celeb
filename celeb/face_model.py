@@ -17,7 +17,7 @@ def do_flip(data):
         data[idx, :, :] = np.fliplr(data[idx, :, :])
 
 
-def get_model(ctx, image_size, model_str, layer):
+def get_model(ctx, image_size, model_str, layer, batch_size=1):
     _vec = model_str.split(',')
     assert len(_vec) == 2
     prefix = _vec[0]
@@ -27,7 +27,7 @@ def get_model(ctx, image_size, model_str, layer):
     all_layers = sym.get_internals()
     sym = all_layers[layer+'_output']
     model = mx.mod.Module(symbol=sym, context=ctx, label_names=None)
-    model.bind(data_shapes=[('data', (1, 3, image_size[0], image_size[1]))])
+    model.bind(data_shapes=[('data', (batch_size, 3, image_size[0], image_size[1]))])
     model.set_params(arg_params, aux_params)
     return model
 
@@ -39,6 +39,9 @@ class FaceModel:
             ctx = mx.gpu(args.gpu)
         else:
             ctx = mx.cpu()
+        # on GPU, bind at a fixed batch size and pad partial batches so the executor
+        # (and cudnn autotuning) is not rebuilt for every new batch shape
+        self.fixed_batch_size = args.get('embed_batch_size', 32) if args.gpu >= 0 else None
 
         self.image_size = args.image_size
         self.model = None
@@ -51,7 +54,7 @@ class FaceModel:
                 pretrained='vggface2').to(args.device).eval()
             logging.info(f'loading vggface2')
         else:
-            self.model = get_model(ctx, self.image_size, args.model, 'fc1')
+            self.model = get_model(ctx, self.image_size, args.model, 'fc1', batch_size=self.fixed_batch_size or 1)
             logging.info(f'loading insightface')
         if len(args.ga_model) > 0:
             self.ga_model = get_model(
@@ -100,11 +103,15 @@ class FaceModel:
         for start_idx in range(0, n_images, batch_size):
             end_idx = min(start_idx + batch_size, n_images)
             input_blob = aligned_batch[start_idx:end_idx]
+            n = len(input_blob)
+            if self.fixed_batch_size and n < self.fixed_batch_size:
+                pad = np.zeros((self.fixed_batch_size - n,) + input_blob.shape[1:], dtype=input_blob.dtype)
+                input_blob = np.concatenate([input_blob, pad])
             data = mx.nd.array(input_blob)
             db = mx.io.DataBatch(data=(data,))
             self.model.forward(db, is_train=False)
-            embedding = self.model.get_outputs()[0].asnumpy()
-            logging.info(f'embedding shape {embedding.shape}')
+            embedding = self.model.get_outputs()[0].asnumpy()[:n]
+            logging.debug(f'embedding shape {embedding.shape}')
             embedding = sklearn.preprocessing.normalize(embedding, axis=1)
             embeddings.append(embedding)
 
