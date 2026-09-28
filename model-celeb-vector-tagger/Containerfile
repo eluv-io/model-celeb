@@ -1,0 +1,32 @@
+# Build context must be the parent model-celeb/ dir: this container reuses model-celeb's
+# `celeb.ground_truth` and its ground truth pools under models/image_features.
+#
+# Build from model-celeb/ with:
+#   `podman build -f model-celeb-vector-tagger/Containerfile -t celeb-vector-tagger .`
+# Or run `make build` from within model-celeb-vector-tagger.
+#
+# (All COPY paths are relative to the model-celeb/ root.)
+FROM continuumio/miniconda3:latest
+WORKDIR /elv
+
+RUN conda create -n mlpod python=3.10 -y
+
+# libgl1/libglib2.0-0: opencv (pulled in by common-ml) needs them to import
+RUN apt-get update && apt-get install -y build-essential git libgl1 libglib2.0-0
+
+COPY model-celeb-vector-tagger/setup.py .
+RUN mkdir -p celeb_vector_tagger celeb
+
+RUN /opt/conda/envs/mlpod/bin/pip install .
+
+# ground truth pools only (IBC etc.), no detection/embedding weights needed
+COPY models/image_features ./models/image_features
+
+COPY celeb ./celeb
+COPY model-celeb-vector-tagger/celeb_vector_tagger ./celeb_vector_tagger
+COPY model-celeb-vector-tagger/config.yml model-celeb-vector-tagger/run.py model-celeb-vector-tagger/config.py ./
+
+# the pool search is one BLAS matmul per chunk: past ~8 threads it burns far more CPU for no speedup
+ENV OPENBLAS_NUM_THREADS=8 OMP_NUM_THREADS=8 MKL_NUM_THREADS=8
+
+ENTRYPOINT ["/opt/conda/envs/mlpod/bin/python", "run.py"]

@@ -1,0 +1,10 @@
+storage:
+  # ground truth pools (IBC, ...)
+  gt_path: /ml/models/celeb/image_features
+container:
+  gt_path: models/image_features
+ground_truth:
+  url: https://tagging.ai.contentfabric.io/ground-truth
+vectorstore:
+  # overridden by ELV_VECTORSTORE_URL
+  url: http://localhost:8108

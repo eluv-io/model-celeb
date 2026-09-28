@@ -11,7 +11,7 @@ class RuntimeConfig:
     # Standardize image and video embeddings using just the video path model InsightFace.
 
     # Drop detections whose normalized box area is below this (same knob as model-celeb).
-    min_box_size: float = 0.0
+    min_box_size: float = 0.1
 
     # MTCNN confidence gate. Hardcoded to 0.96 in model-celeb's detect_batch.
     det_confidence: float = 0.96
