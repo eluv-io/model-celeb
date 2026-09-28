@@ -20,6 +20,7 @@ common-ml's `AVModel.from_frame_model` adds these:
 
 - `min_box_size` (float, default 0.1): drop faces whose normalized box area is below this
 - `det_confidence` (float, default 0.96): MTCNN confidence gate
+- `max_faces` (int, default 4): keep at most this many faces per frame, the largest by box area, after the two filters above; 0 keeps all
 - `fps` (default 1.0) and `allow_single_frame`: common-ml's standard frame-model params
 
 ## Requirements

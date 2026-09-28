@@ -86,6 +86,7 @@ class CelebVectorizer(BatchFrameModel):
             if boxes is None:
                 continue
             h, w, _ = img.shape
+            kept = []  # (crop, normalized box) of faces passing the filters, in detection order
             for box, prob in zip(boxes, probs):
                 if prob is None or prob < self.config.det_confidence:
                     continue
@@ -98,6 +99,12 @@ class CelebVectorizer(BatchFrameModel):
                 face = img[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
                 if face.size == 0:
                     continue
+                kept.append((face, nb))
+            if self.config.max_faces > 0 and len(kept) > self.config.max_faces:
+                # the largest faces, still in detection order
+                largest = sorted(range(len(kept)), key=lambda k: self._box_area(kept[k][1]), reverse=True)
+                kept = [kept[k] for k in sorted(largest[:self.config.max_faces])]
+            for face, nb in kept:
                 c = cv2.resize(face, _IMAGE_SIZE)
                 c = np.transpose(c, (2, 0, 1))  # H, W, C -> C, H, W
                 crops.append(c)

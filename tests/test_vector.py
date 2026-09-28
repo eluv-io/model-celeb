@@ -27,3 +27,42 @@ def test_model():
         # vector tags pass through per-frame (AVModel.from_frame_model does not run-length merge them)
         if tag.frame_info:
             assert tag.frame_info.box
+
+class _FakeDetector:
+    def __init__(self, boxes, probs):
+        self.boxes, self.probs = boxes, probs
+
+    def detect(self, imgs):
+        return [np.array(self.boxes, dtype=np.float32)] * len(imgs), [np.array(self.probs)] * len(imgs)
+
+
+class _FakeEmbedder:
+    def embed(self, faces):
+        return np.ones((len(faces), 512), dtype=np.float32) / np.sqrt(512)
+
+
+def _vectorizer(boxes, probs, **cfg):
+    # skip __init__ (weights, GPU): only the detection filtering is under test
+    model = CelebVectorizer.__new__(CelebVectorizer)
+    model.config = RuntimeConfig(min_box_size=0, **cfg)
+    model.detector = _FakeDetector(boxes, probs)
+    model.embedder = _FakeEmbedder()
+    return model
+
+
+def test_max_faces_keeps_largest_in_detection_order():
+    # 100x100 frame; face i is a square of side sides[i]
+    sides = [10, 50, 20, 40, 30, 5]
+    boxes = [[0, 0, s, s] for s in sides]
+    img = np.zeros((1, 100, 100, 3), dtype=np.uint8)
+
+    tags = _vectorizer(boxes, [0.99] * 6).tag_frames(img)[0]
+    assert [t.box["x2"] for t in tags] == [0.5, 0.2, 0.4, 0.3]  # 4 largest, detection order kept
+
+    tags = _vectorizer(boxes, [0.99] * 6, max_faces=2).tag_frames(img)[0]
+    assert [t.box["x2"] for t in tags] == [0.5, 0.4]
+
+    # 0 disables the limit; low-confidence faces are dropped before choosing the largest
+    probs = [0.99, 0.5, 0.99, 0.99, 0.99, 0.99]
+    assert len(_vectorizer(boxes, probs, max_faces=0).tag_frames(img)[0]) == 5
+    assert [t.box["x2"] for t in _vectorizer(boxes, probs).tag_frames(img)[0]] == [0.1, 0.2, 0.4, 0.3]

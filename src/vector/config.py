@@ -14,3 +14,6 @@ class RuntimeConfig:
 
     # MTCNN confidence gate.
     det_confidence: float = 0.96
+
+    # Keep at most this many faces per frame, the largest by box area (after the filters above). 0 keeps all.
+    max_faces: int = 4
