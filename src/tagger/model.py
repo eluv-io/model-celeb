@@ -11,14 +11,14 @@ from loguru import logger
 from common_ml.tagging.messages import Tag
 from common_ml.tagging.models.av import AVModel
 
-from celeb_vector_tagger.config import RuntimeConfig
-from celeb_vector_tagger.pool import CelebPool
-from celeb_vector_tagger.vectorstore import StoredVector, VectorstoreClient
+from src.tagger.config import RuntimeConfig
+from src.tagger.pool import CelebPool
+from src.tagger.vectorstore import StoredVector, VectorstoreClient
 
 
 class CelebVectorTagger(AVModel):
-    """Second half of model-celeb split in two: model-celeb-vector detects and embeds faces into the
-    vectorstore; this reads those embeddings back and names them against a ground truth pool.
+    """Names the faces model-celeb-vector detected and embedded into the vectorstore, by reading
+    those embeddings back and matching them against a ground truth pool.
 
     Runs as a content aligned processor: each input file is a JSON time range
     ({"start_time": ms, "end_time": ms}) of the content, and every face vector starting in
@@ -30,7 +30,6 @@ class CelebVectorTagger(AVModel):
         self.content_qid = content_qid
         self.config = cfg
         if self.config.thres == -1:
-            # same defaults as model-celeb
             self.config.thres = 0.55 if self.config.ground_truth == "IBC" else 0.4
 
     def set_config(self, config: dict) -> None:

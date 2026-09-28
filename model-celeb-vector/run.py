@@ -3,20 +3,18 @@ import setproctitle
 
 from common_ml.tagging.run_helpers import catch_errors, get_params, run_default
 
-from celeb_vector.model import CelebVectorizer
-from celeb_vector.config import RuntimeConfig
-from config import config
+from src.config import load_config
+from src.vector import CelebVectorizer, RuntimeConfig
 
 if __name__ == '__main__':
     setproctitle.setproctitle('model-celeb-vector')
 
     catch_errors()
 
-    params = get_params()
-    params = from_dict(RuntimeConfig, data=params)
+    config = load_config()
+    params = from_dict(RuntimeConfig, data=get_params())
 
-    # no ground-truth pool compared to model-celeb/run.py
-    # this container only detects & embeds faces
+    # detects & embeds faces only; celeb-vector-tagger names them from the vectorstore
     model = CelebVectorizer(model_input_path=config["container"]["model_path"], cfg=params)
 
     run_default(model)

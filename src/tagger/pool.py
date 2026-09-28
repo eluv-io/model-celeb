@@ -9,7 +9,7 @@ from loguru import logger
 
 
 class CelebPool:
-    """A ground truth pool (feats.npy / gt.npy / id2name.json, same layout model-celeb uses)
+    """A ground truth pool (feats.npy / gt.npy / id2name.json, optionally ca_lookup.json / restrict.txt)
     that assigns each face embedding its most similar pool face."""
 
     # pool rows scored at a time, bounds the (rows, queries) similarity matrix
@@ -17,7 +17,7 @@ class CelebPool:
 
     def __init__(self, pool_path: str):
         self.pool_path = pool_path
-        # upcast once (as model-celeb does) so every search is a plain fp32 matmul
+        # upcast the stored fp16 once so every search is a plain fp32 matmul
         self.feats = np.load(os.path.join(pool_path, 'feats.npy')).astype(np.float32)
         self.gt = np.load(os.path.join(pool_path, 'gt.npy'))
         with open(os.path.join(pool_path, 'id2name.json'), 'r') as f:
@@ -31,7 +31,7 @@ class CelebPool:
                 self.cast_check = {k: set(v) if v else None for k, v in json.load(f).items()}
 
     def cast_pool(self, content_id: Optional[str], restrict_list: Optional[List[str]]) -> Optional[Set[str]]:
-        """Names allowed for this content, None if unrestricted. Same precedence as model-celeb."""
+        """Names allowed for this content, None if unrestricted: content_id's ca_lookup entry, else restrict_list, else restrict.txt."""
         if content_id:
             return self.cast_check.get(content_id, None)
         if restrict_list:

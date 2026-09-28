@@ -1,15 +1,8 @@
 # model-celeb-vector-tagger
 
-Names the faces that [model-celeb-vector](../model-celeb-vector) wrote to the vectorstore.
+Names the faces that [model-celeb-vector](../model-celeb-vector) wrote to the vectorstore: it reads those embeddings back, matches each one against a ground truth pool, and emits celebrity tags. Swapping or growing the pool only reruns this step, a matmul per face, instead of reprocessing the video.
 
-`model-celeb` detects, embeds and matches faces against a celebrity pool in one pass. The split version does it in two:
-
-1. **model-celeb-vector** detects faces and writes one InsightFace r100 embedding per face to a vectorstore index.
-2. **model-celeb-vector-tagger** (this container) reads those embeddings back, matches each one against a ground truth pool, and emits celebrity tags.
-
-Swapping or growing the ground truth pool then only reruns step 2, which is a matmul per face instead of reprocessing the video.
-
-On the same clips, this produces exactly the same named faces as `model-celeb`: the same embeddings, pool, threshold and cast filter.
+The code is `src.tagger` in the repo's shared [`src`](../src) package. This folder holds only the container's entrypoint, config and build.
 
 ## How it runs
 
@@ -37,9 +30,9 @@ For each chunk, the container:
 
 ## Runtime parameters (`--params` JSON string)
 
-- `thres` (float, default -1): minimum similarity to the best matching pool face. -1 uses model-celeb's defaults: 0.55 for IBC, 0.4 for any other pool.
+- `thres` (float, default -1): minimum similarity to the best matching pool face. -1 uses 0.55 for IBC and 0.4 for any other pool.
 - `ground_truth` (default `IBC`): a pool bundled under `models/image_features`, or a content id to download with `ELV_TOKEN`.
-- `content_id`, `restrict_list`: restrict names to a cast. The same precedence as model-celeb applies: the pool's `ca_lookup.json` entry for `content_id`, else `restrict_list`, else the pool's `restrict.txt`.
+- `content_id`, `restrict_list`: restrict names to a cast. The precedence is: the pool's `ca_lookup.json` entry for `content_id`, else `restrict_list`, else the pool's `restrict.txt`.
 - `vector_track` (default `face_vectors`): the vectorstore track model-celeb-vector wrote to. This is its model name in the tagger config.
 - `sample_interval_ms` (default: inferred): the spacing of model-celeb-vector's sampled frames, used for merging. By default it is inferred as the smallest gap between face timestamps in a chunk.
 
@@ -60,22 +53,15 @@ For each chunk, the container:
 
 The tagger currently only passes `ELV_TOKEN` and `ELV_CONTENT` to containers (see `src/tag_containers/containers.py`), so it also has to pass `ELV_INDEX_QID`.
 
-## Build
+## Build and test
 
-The build context is the parent `model-celeb/` directory, because the image reuses `celeb.ground_truth` and the pools under `models/image_features`. From this directory:
-
-```
-make build
-```
-
-This syncs the pools from `storage.gt_path` and builds `celeb-vector-tagger:latest`.
-
-Unlike model-celeb and model-celeb-vector, this image does no detection or embedding and needs no GPU: matching is numpy on CPU. With the IBC pool (1M faces), matching 1000 faces takes about 4 s using 8 BLAS threads. The Containerfile caps BLAS at 8 threads with `OPENBLAS_NUM_THREADS`; more threads burn far more CPU for no speedup. Loading the pool takes about 2 GB of RAM.
-
-## Tests
+From the repo root:
 
 ```
-pytest tests
+make -f Makefile.tagger build    # syncs the pools from storage.gt_path, builds celeb-vector-tagger:latest
+make -f Makefile.tagger test     # pytest tests/test_tagger.py
 ```
 
 The tests use a tiny synthetic pool and a fake vectorstore, so they need no pool or network.
+
+This image does no detection or embedding and needs no GPU: matching is numpy on CPU. With the IBC pool (1M faces), matching 1000 faces takes about 4 s using 8 BLAS threads. The Containerfile caps BLAS at 8 threads with `OPENBLAS_NUM_THREADS`; more threads burn far more CPU for no speedup. Loading the pool takes about 2 GB of RAM.

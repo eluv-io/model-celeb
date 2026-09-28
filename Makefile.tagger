@@ -1,0 +1,12 @@
+IMAGE_NAME := celeb-vector-tagger
+
+# the standard tagger-model test feeds test-files/ media, but this is a processor that reads
+# the vectorstore instead, so test with the unit tests
+ELUVIO_MAKEFILE_CUSTOM_TEST := 1
+
+include buildscripts/Makefile.tagger-model
+
+test:
+	python -m pytest tests/test_tagger.py
+
+.PHONY: test

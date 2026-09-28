@@ -3,10 +3,10 @@ import json
 import numpy as np
 import pytest
 
-from celeb_vector_tagger.config import RuntimeConfig
-from celeb_vector_tagger.model import CelebVectorTagger
-from celeb_vector_tagger.pool import CelebPool
-from celeb_vector_tagger.vectorstore import StoredVector, parse_binary_search
+from src.tagger.config import RuntimeConfig
+from src.tagger.model import CelebVectorTagger
+from src.tagger.pool import CelebPool
+from src.tagger.vectorstore import StoredVector, parse_binary_search
 
 DIM = 8
 

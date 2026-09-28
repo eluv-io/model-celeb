@@ -8,25 +8,21 @@ import cv2
 import numpy as np
 import torch
 from dacite import from_dict
-from easydict import EasyDict as edict
 from facenet_pytorch import MTCNN
 from loguru import logger
-
-from celeb import face_model
 
 from common_ml.tagging.models.frame_based import BatchFrameModel
 from common_ml.tagging.models.tag_types import FrameTag
 
-from celeb_vector.config import RuntimeConfig
+from src.vector.config import RuntimeConfig
+from src.vector.embedder import InsightFaceEmbedder
 
-_MODEL_VERSION = "insightface-r100-ii" # additional info for every vector so the vector DB can validate / re-embed if the model changes
-_IMAGE_SIZE = [112, 112]  # InsightFace r100 input from celeb/model.py
+_IMAGE_SIZE = (112, 112)  # InsightFace r100 input
 
 
 class CelebVectorizer(BatchFrameModel):
     """Detects faces and emits one embedding per face as a Tag with vector. 
-    Handles the embedding (once) in the model-celeb pipeline so adding celebrities becomes fast matmul.
-    (Pooling, thresholding, matching, clustering, etc. move to query time with the vector DB.)"""
+    Embeds once, so naming the faces against a pool (src.tagger) is a fast matmul over stored vectors."""
 
     # frames per MTCNN forward pass (bounds GPU memory at high resolutions)
     DET_BATCH_SIZE = 32
@@ -47,24 +43,15 @@ class CelebVectorizer(BatchFrameModel):
                 self.device = torch.device('cuda:0')
             else:
                 logger.warning(f"GPU {sm} unsupported by this torch build {torch.cuda.get_arch_list()}; running on CPU")
-        self.args = self._add_params()
 
-        self.detector = MTCNN(image_size=self.args.image_size[0], keep_all=True, device=self.args.device)
+        self.detector = MTCNN(image_size=_IMAGE_SIZE[0], keep_all=True, device=self.device)
         logger.info(f"MTCNN on GPU: {next(self.detector.parameters()).is_cuda}")
-        self.model = face_model.FaceModel(self.args)
-
-    def _add_params(self) -> edict:
-        return edict({
-            'image_size': _IMAGE_SIZE,
-            'model': os.path.join(self.model_input_path, 'models/model-r100-ii/model,0'),
-            'ga_model': '',
+        self.embedder = InsightFaceEmbedder(
+            os.path.join(self.model_input_path, 'models/model-r100-ii/model'),
             # mxnet-cu101 supports the same (pre-Ampere) GPUs as torch 1.9, so follow the torch device check
-            'gpu': 0 if self.device.type == 'cuda' else -1,
-            'embed_batch_size': 32,
-            'threshold': 1.24,
-            'content_type': 'video', # only use the InsightFace backend (video input embedding path in celeb/model.py)
-            'device': self.device,
-        })
+            gpu=0 if self.device.type == 'cuda' else -1,
+            image_size=_IMAGE_SIZE,
+        )
 
     def set_config(self, config: dict) -> None:
         self.config = from_dict(RuntimeConfig, config)
@@ -73,7 +60,7 @@ class CelebVectorizer(BatchFrameModel):
         return asdict(self.config)
 
     @staticmethod
-    def _box_area(box: List[float]) -> float: # matches celeb/model.py's _box_size
+    def _box_area(box: List[float]) -> float:
         return abs(box[2] - box[0]) * abs(box[3] - box[1])
 
     def _detect(self, imgs: np.ndarray):
@@ -111,8 +98,8 @@ class CelebVectorizer(BatchFrameModel):
                 face = img[max(0, y1):min(h, y2), max(0, x1):min(w, x2)]
                 if face.size == 0:
                     continue
-                c = cv2.resize(face, tuple(self.args.image_size))
-                c = np.transpose(c, (2, 0, 1))  # H, W, C -> C, H, W, matches model-celeb preprocessing
+                c = cv2.resize(face, _IMAGE_SIZE)
+                c = np.transpose(c, (2, 0, 1))  # H, W, C -> C, H, W
                 crops.append(c)
                 norm_boxes.append(nb)
                 frame_idx.append(i)
@@ -121,14 +108,10 @@ class CelebVectorizer(BatchFrameModel):
         if not crops:
             return out
 
-        # embed all faces of the batch at once; (N, len(vector)) matches celeb/model.py and InsightFace in face_model does L2-normalization
-        feats = self.model.get_batch_features(aligned_batch=np.array(crops), batch_size=32)
+        # embed all faces of the batch at once; unit-length so cosine == dot for the vector DB
+        feats = self.embedder.embed(np.array(crops))
 
-        for vec, nb, i in zip(feats, norm_boxes, frame_idx):
-            v = vec.astype(np.float32)
-            # InsightFace already L2-normalizes; re-normalize after the float32 cast so the
-            # emitted vector is exactly unit-length (cosine == dot for the vector DB).
-            v = v / (np.linalg.norm(v) + 1e-12)
+        for v, nb, i in zip(feats, norm_boxes, frame_idx):
             out[i].append(FrameTag(
                 tag="",
                 vector=v.tolist(),

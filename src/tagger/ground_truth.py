@@ -17,7 +17,7 @@ class GroundTruthFetcher:
         self.token = token
         self.base_dir = base_dir
 
-    def need_fetch(self, gt: str) -> str:
+    def need_fetch(self, gt: str) -> bool:
         """Returns if ground truth is needed to be fetched"""
         local_path = os.path.join(self.base_dir, gt)
         if os.path.exists(local_path):
@@ -32,8 +32,6 @@ class GroundTruthFetcher:
         """Returns local path for gt, downloading and unpacking zip if it doesn't exist."""
         if not self.need_fetch(gt):
             return os.path.join(self.base_dir, gt)
-        elif not gt.startswith("iq__"):
-            raise ValueError(f"Ground truth identifier {gt} is not valid - Should be a content id")
 
         logger.info(f"Fetching ground truth {gt} from {self.url}")
         response = requests.get("/".join([self.url, gt, "pool"]), headers={"Authorization":self.token})

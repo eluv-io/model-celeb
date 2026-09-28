@@ -2,19 +2,17 @@ import os
 
 import numpy as np
 
-from celeb_vector.model import CelebVectorizer
-from celeb_vector.config import RuntimeConfig
+from src.vector import CelebVectorizer, RuntimeConfig
 
 from common_ml.tagging.file_tagger import FileTagger
 
-from config import config
-
-# test-files live in the parent model-celeb/ repo, two levels up from this test.
-TEST_FILE = os.path.join(os.path.dirname(__file__), "../../test-files/1.mp4")
+REPO = os.path.join(os.path.dirname(__file__), "..")
+TEST_FILE = os.path.join(REPO, "test-files/1.mp4")
 
 
 def test_model():
-    model = CelebVectorizer(model_input_path=config["container"]["model_path"], cfg=RuntimeConfig())
+    # needs the InsightFace weights under models/models (./pull-models or build.sh)
+    model = CelebVectorizer(model_input_path=os.path.join(REPO, "models"), cfg=RuntimeConfig(min_box_size=0))
     tagger = FileTagger.from_frame_model(model)
     tags = tagger.tag(TEST_FILE)
     assert len(tags) > 0

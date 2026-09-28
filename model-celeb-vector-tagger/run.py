@@ -5,12 +5,8 @@ from dacite import from_dict
 
 from common_ml.tagging.run_helpers import catch_errors, get_params, run_default
 
-from celeb.ground_truth import GroundTruthFetcher
-from celeb_vector_tagger.config import RuntimeConfig
-from celeb_vector_tagger.model import CelebVectorTagger
-from celeb_vector_tagger.pool import CelebPool
-from celeb_vector_tagger.vectorstore import VectorstoreClient
-from config import config
+from src.config import load_config
+from src.tagger import CelebPool, CelebVectorTagger, GroundTruthFetcher, RuntimeConfig, VectorstoreClient
 
 
 def _require_env(name: str) -> str:
@@ -25,6 +21,7 @@ if __name__ == '__main__':
 
     catch_errors()
 
+    config = load_config()
     params = from_dict(RuntimeConfig, data=get_params())
 
     # the index holding model-celeb-vector's embeddings, and the content being tagged (set by the tagger)

@@ -1,7 +1,5 @@
-device: cuda
-
 storage:
-  # InsightFace r100 weights
-  model_path: /ml/models/celeb_detection
+  # synced into models/ by build.sh; the container needs models/models/model-r100-ii (InsightFace r100)
+  model_path: /ml/models/celeb
 container:
   model_path: models

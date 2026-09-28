@@ -1,10 +1,10 @@
 #!/bin/bash
+# Builds celeb-vector-tagger from the repo root (run via `make -f Makefile.tagger build`).
 
 set -e
 
 SCRIPT_PATH="$(dirname "$(realpath "$0")")"
-REPO_PATH="$(dirname "$SCRIPT_PATH")"
-cd "$REPO_PATH"
+cd "$(dirname "$SCRIPT_PATH")"
 
 git submodule update --init --recursive
 

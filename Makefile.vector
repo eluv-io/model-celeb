@@ -1,3 +1,4 @@
 IMAGE_NAME := celeb-vector
 
+# `make -f Makefile.vector test` runs the container over test-files/
 include buildscripts/Makefile.tagger-model
