@@ -10,7 +10,7 @@ class RuntimeConfig:
     # Naming faces (threshold, ground truth pool, cast list) happens later in src.tagger.
 
     # Drop detections whose normalized box area is below this.
-    min_box_size: float = 0.025
+    min_box_size: float = 0.005
 
     # MTCNN confidence gate.
     det_confidence: float = 0.96
