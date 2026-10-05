@@ -23,5 +23,8 @@ class RuntimeConfig:
     vector_track: str = "face_vectors"
 
     # Spacing (ms) between the frames model-celeb-vector sampled; same-name faces on
-    # neighbouring sampled frames merge into one tag. None infers it from the vectors.
+    # consecutive sampled frames merge into one segment tag. None infers it from the vectors.
     sample_interval_ms: Optional[int] = None
+
+    # Emit segment tags for names seen on a single sampled frame (common-ml's frame model param).
+    allow_single_frame: bool = True

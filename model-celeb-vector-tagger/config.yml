@@ -7,4 +7,4 @@ ground_truth:
   url: https://tagging.ai.contentfabric.io/ground-truth
 vectorstore:
   # overridden by ELV_VECTORSTORE_URL
-  url: http://localhost:8108
+  url: https://ai-04.contentfabric.io/vector_store

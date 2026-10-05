@@ -8,7 +8,7 @@ import numpy as np
 from dacite import from_dict
 from loguru import logger
 
-from common_ml.tagging.messages import Tag
+from common_ml.tagging.messages import FrameInfo, Tag
 from common_ml.tagging.models.av import AVModel
 
 from src.tagger.config import RuntimeConfig
@@ -64,46 +64,55 @@ class CelebVectorTagger(AVModel):
         logger.info(f"[{start}, {end}): {len(faces)}/{len(hits)} faces above {self.config.thres}")
 
         interval_ms = self.config.sample_interval_ms or _infer_sample_interval(hits)
-        frame_tags = [self._face_tag(hit, name, score, fpath) for hit, name, score in faces]
-        return frame_tags + self._merge_adjacent(faces, interval_ms, fpath)
+        frame_tags = [self._frame_tag(hit, name, score, fpath) for hit, name, score in faces]
+        return frame_tags + self._combine_adjacent(frame_tags, interval_ms, _infer_frame_ms(hits))
 
-    def _face_tag(self, hit: StoredVector, name: str, score: float, fpath: str) -> Tag:
-        info: Dict = {"confidence": round(score, 4)}
-        if "box" in hit.additional_info:
-            info["box"] = hit.additional_info["box"]
+    def _frame_tag(self, hit: StoredVector, name: str, score: float, fpath: str) -> Tag:
+        frame_info = None
         if hit.frame_idx is not None:
-            info["frame_idx"] = hit.frame_idx
+            frame_info = FrameInfo(frame_idx=hit.frame_idx, box=hit.additional_info.get("box", {}))
         return Tag(
             start_time=hit.start_time,
             end_time=hit.end_time,
             tag=name,
             source_media=fpath,
-            additional_info=info,
+            additional_info={"confidence": round(score, 4)},
+            frame_info=frame_info,
         )
 
-    def _merge_adjacent(self, faces, interval_ms: Optional[int], fpath: str) -> List[Tag]:
-        """One tag per run of sampled frames that show the same name, where consecutive frames of a
-        run are at most ~one sample interval apart. Each run extends one interval past its last frame."""
-        times_by_name: Dict[str, List[int]] = {}
-        for hit, name, _ in faces:
-            times_by_name.setdefault(name, []).append(hit.start_time)
+    def _combine_adjacent(self, frame_tags: List[Tag], interval_ms: Optional[int], frame_ms: int) -> List[Tag]:
+        """Segment tags from frame tags, as common-ml's AVModel.from_frame_model does for frame models:
+        one tag per run of consecutive sampled frames showing the same name, ending one video frame
+        after the run's last frame. Runs of a single frame are dropped unless allow_single_frame."""
+        def next_sample(prev: Tag, t: Tag) -> bool:
+            # the sampled frame right after prev's: a gap of about one sample interval
+            return bool(interval_ms) and round((t.start_time - prev.start_time) / interval_ms) == 1
+
+        by_name: Dict[str, Dict[int, Tag]] = {}
+        for t in frame_tags:
+            # several faces with the same name on one frame count once
+            by_name.setdefault(t.tag, {}).setdefault(t.start_time, t)
+
+        def combined(left: Tag, right: Tag) -> Tag:
+            return Tag(
+                start_time=left.start_time,
+                end_time=right.end_time + frame_ms,
+                tag=left.tag,
+                source_media=left.source_media,
+                track=left.track,
+            )
 
         out = []
-        for name, times in times_by_name.items():
-            times = sorted(set(times))
-            run_start = prev = times[0]
-            for t in times[1:] + [None]:
-                if t is not None and interval_ms is not None and t - prev <= 1.5 * interval_ms:
-                    prev = t
+        for items in by_name.values():
+            run = [items[p] for p in sorted(items)]
+            left = right = run[0]
+            for item in run[1:] + [None]:
+                if item is not None and next_sample(right, item):
+                    right = item
                     continue
-                out.append(Tag(
-                    start_time=run_start,
-                    end_time=prev + (interval_ms or 0),
-                    tag=name,
-                    source_media=fpath,
-                ))
-                if t is not None:
-                    run_start = prev = t
+                if self.config.allow_single_frame or right is not left:
+                    out.append(combined(left, right))
+                left = right = item
         return sorted(out, key=lambda t: (t.start_time, t.tag))
 
 
@@ -113,3 +122,13 @@ def _infer_sample_interval(hits: List[StoredVector]) -> Optional[int]:
     gaps = np.diff(times)
     gaps = gaps[gaps > 0]
     return int(gaps.min()) if len(gaps) else None
+
+
+def _infer_frame_ms(hits: List[StoredVector]) -> int:
+    """The duration (ms) of one video frame, from the content aligned frame index and start time
+    of the latest frame; 0 if no hit has a frame index."""
+    known = [h for h in hits if h.frame_idx]
+    if not known:
+        return 0
+    last = max(known, key=lambda h: h.frame_idx)
+    return round(last.start_time / last.frame_idx)
